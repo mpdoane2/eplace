@@ -8,6 +8,7 @@ provides tools for analyzing environmental DNA sequences.
 __version__ = "0.1.0"
 __author__ = "Rob Edwards"
 
-# Import main modules when they are created
-# from .analysis import *
-# from .sequences import *
+# Import main classes for convenient access
+from .sequences import SequenceAnalyzer
+
+__all__ = ["SequenceAnalyzer"]

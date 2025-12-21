@@ -15,10 +15,6 @@ class SequenceAnalyzer:
     commonly used in environmental DNA studies.
     """
     
-    def __init__(self):
-        """Initialize the SequenceAnalyzer."""
-        pass
-    
     def calculate_gc_content(self, sequence: str) -> float:
         """
         Calculate the GC content of a DNA sequence.
