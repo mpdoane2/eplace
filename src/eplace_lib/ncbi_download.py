@@ -146,8 +146,10 @@ class NCBIDownloader:
         url = self.NCBI_FTP_BASE + filename
         dest_path = dest_dir / filename
         
-        # Ensure the resolved path is within dest_dir
-        if not str(dest_path.resolve()).startswith(str(dest_dir.resolve())):
+        # Ensure the destination path is within dest_dir (Python 3.9+)
+        try:
+            dest_path.relative_to(dest_dir)
+        except ValueError:
             raise ValueError(f"Invalid destination path: {dest_path}")
         
         try:
@@ -166,12 +168,27 @@ class NCBIDownloader:
             
         Returns:
             True if checksum matches, False otherwise
+            
+        Raises:
+            ValueError: If MD5 file format is invalid
         """
         # Read expected MD5 from file
         with open(md5_file_path, 'r') as f:
             md5_content = f.read().strip()
-            # MD5 files typically have format: "checksum filename"
-            expected_md5 = md5_content.split()[0]
+            
+        if not md5_content:
+            raise ValueError(f"MD5 file is empty: {md5_file_path}")
+        
+        # MD5 files typically have format: "checksum filename"
+        parts = md5_content.split()
+        if not parts:
+            raise ValueError(f"Invalid MD5 file format: {md5_file_path}")
+        
+        expected_md5 = parts[0]
+        
+        # Validate MD5 hash format (32 hex characters)
+        if len(expected_md5) != 32 or not all(c in '0123456789abcdefABCDEF' for c in expected_md5):
+            raise ValueError(f"Invalid MD5 hash format: {expected_md5}")
         
         # Calculate actual MD5
         md5_hash = hashlib.md5()
@@ -180,7 +197,7 @@ class NCBIDownloader:
                 md5_hash.update(chunk)
         actual_md5 = md5_hash.hexdigest()
         
-        return actual_md5 == expected_md5
+        return actual_md5.lower() == expected_md5.lower()
     
     def extract_tarball(self, tarball_path: Path, dest_dir: Path) -> None:
         """
@@ -194,12 +211,16 @@ class NCBIDownloader:
             tarfile.TarError: If extraction fails
             ValueError: If tarball contains unsafe paths
         """
+        dest_dir_resolved = dest_dir.resolve()
+        
         with tarfile.open(tarball_path, 'r:gz') as tar:
             # Validate all member paths before extraction to prevent path traversal
             for member in tar.getmembers():
-                member_path = dest_dir / member.name
-                # Ensure the member path is within dest_dir
-                if not str(member_path.resolve()).startswith(str(dest_dir.resolve())):
+                member_path = (dest_dir / member.name).resolve()
+                # Use relative_to() for safe path validation
+                try:
+                    member_path.relative_to(dest_dir_resolved)
+                except ValueError:
                     raise ValueError(f"Unsafe path in tarball: {member.name}")
             
             # Safe to extract after validation

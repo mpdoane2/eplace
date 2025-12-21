@@ -5,6 +5,7 @@ Tests for NCBI database download functionality.
 import os
 import tempfile
 import hashlib
+import tarfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 import pytest
@@ -110,18 +111,43 @@ class TestNCBIDownloader:
             test_file = tmppath / "test.txt"
             test_file.write_bytes(b"Hello, World!")
             
-            # Create MD5 file with wrong hash
+            # Create MD5 file with wrong hash (valid format but wrong value)
             md5_file = tmppath / "test.txt.md5"
-            md5_file.write_text("wronghash123456789  test.txt\n")
+            md5_file.write_text("00000000000000000000000000000000  test.txt\n")
             
             downloader = NCBIDownloader()
             result = downloader.verify_md5(test_file, md5_file)
             assert result is False
     
+    def test_verify_md5_invalid_format(self):
+        """Test MD5 verification with invalid file format."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create a test file
+            test_file = tmppath / "test.txt"
+            test_file.write_bytes(b"Hello, World!")
+            
+            downloader = NCBIDownloader()
+            
+            # Test empty MD5 file
+            md5_file = tmppath / "empty.md5"
+            md5_file.write_text("")
+            with pytest.raises(ValueError, match="MD5 file is empty"):
+                downloader.verify_md5(test_file, md5_file)
+            
+            # Test invalid hash format (too short)
+            md5_file.write_text("tooshort")
+            with pytest.raises(ValueError, match="Invalid MD5 hash format"):
+                downloader.verify_md5(test_file, md5_file)
+            
+            # Test invalid characters
+            md5_file.write_text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            with pytest.raises(ValueError, match="Invalid MD5 hash format"):
+                downloader.verify_md5(test_file, md5_file)
+    
     def test_extract_tarball(self):
         """Test tarball extraction."""
-        import tarfile
-        
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             
@@ -151,8 +177,6 @@ class TestNCBIDownloader:
     
     def test_extract_tarball_with_unsafe_path(self):
         """Test tarball extraction rejects unsafe paths."""
-        import tarfile
-        
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             
@@ -163,13 +187,15 @@ class TestNCBIDownloader:
             # Create tarball with path traversal
             tarball_path = tmppath / "unsafe.tar.gz"
             with tarfile.open(tarball_path, 'w:gz') as tar:
-                tar.add(test_file, arcname="../../../evil.txt")
+                # Use a path that escapes the extraction directory
+                tar.add(test_file, arcname="../evil.txt")
             
             # Try to extract
             extract_dir = tmppath / "extracted"
             extract_dir.mkdir()
             
             downloader = NCBIDownloader()
+            # Should raise ValueError for unsafe path
             with pytest.raises(ValueError, match="Unsafe path in tarball"):
                 downloader.extract_tarball(tarball_path, extract_dir)
     
