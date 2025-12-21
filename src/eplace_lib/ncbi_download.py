@@ -8,10 +8,14 @@ specifically the core nucleotide (nt) database.
 import os
 import hashlib
 import tarfile
+import logging
 from pathlib import Path
 from typing import Optional, List, Tuple
 from urllib.request import urlopen, urlretrieve
 from urllib.error import URLError
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
 class NCBIDownloader:
@@ -133,9 +137,18 @@ class NCBIDownloader:
             
         Raises:
             URLError: If download fails
+            ValueError: If filename contains path traversal sequences
         """
+        # Validate filename to prevent path traversal attacks
+        if '..' in filename or filename.startswith('/') or '\\' in filename:
+            raise ValueError(f"Invalid filename: {filename}")
+        
         url = self.NCBI_FTP_BASE + filename
         dest_path = dest_dir / filename
+        
+        # Ensure the resolved path is within dest_dir
+        if not str(dest_path.resolve()).startswith(str(dest_dir.resolve())):
+            raise ValueError(f"Invalid destination path: {dest_path}")
         
         try:
             urlretrieve(url, dest_path)
@@ -179,11 +192,20 @@ class NCBIDownloader:
             
         Raises:
             tarfile.TarError: If extraction fails
+            ValueError: If tarball contains unsafe paths
         """
         with tarfile.open(tarball_path, 'r:gz') as tar:
+            # Validate all member paths before extraction to prevent path traversal
+            for member in tar.getmembers():
+                member_path = dest_dir / member.name
+                # Ensure the member path is within dest_dir
+                if not str(member_path.resolve()).startswith(str(dest_dir.resolve())):
+                    raise ValueError(f"Unsafe path in tarball: {member.name}")
+            
+            # Safe to extract after validation
             tar.extractall(path=dest_dir)
     
-    def download_and_setup_database(self, force_download: bool = False) -> Tuple[bool, str]:
+    def download_and_setup_database(self, force_download: bool = False, verbose: bool = True) -> Tuple[bool, str]:
         """
         Main function to download and setup the NCBI core_nt database.
         
@@ -196,18 +218,26 @@ class NCBIDownloader:
         
         Args:
             force_download: If True, downloads even if database exists
+            verbose: If True, logs progress information (default: True)
             
         Returns:
             Tuple of (success: bool, message: str)
         """
+        # Set up logging level
+        if verbose:
+            logging.basicConfig(level=logging.INFO, format='%(message)s')
+        
         db_dir = self.get_blastdb_directory()
         
         # Check if database already exists
         if not force_download and self.check_database_exists(db_dir):
-            return True, f"Database already exists in {db_dir}"
+            msg = f"Database already exists in {db_dir}"
+            logger.info(msg)
+            return True, msg
         
         try:
             # Get list of available files
+            logger.info("Fetching list of available files from NCBI FTP...")
             files = self.get_available_files()
             
             if not files:
@@ -220,33 +250,35 @@ class NCBIDownloader:
             # Download all files
             downloaded_tarballs = []
             for tar_file in tar_files:
-                print(f"Downloading {tar_file}...")
+                logger.info(f"Downloading {tar_file}...")
                 tar_path = self.download_file(tar_file, db_dir)
                 
                 # Download corresponding MD5 file
                 md5_file = f"{tar_file}.md5"
                 if md5_file in md5_files:
-                    print(f"Downloading {md5_file}...")
+                    logger.info(f"Downloading {md5_file}...")
                     md5_path = self.download_file(md5_file, db_dir)
                     
                     # Verify MD5
-                    print(f"Verifying checksum for {tar_file}...")
+                    logger.info(f"Verifying checksum for {tar_file}...")
                     if not self.verify_md5(tar_path, md5_path):
                         return False, f"MD5 checksum verification failed for {tar_file}"
                     
-                    print(f"Checksum verified for {tar_file}")
+                    logger.info(f"Checksum verified for {tar_file}")
                 else:
-                    print(f"Warning: No MD5 file found for {tar_file}")
+                    logger.warning(f"Warning: No MD5 file found for {tar_file}")
                 
                 downloaded_tarballs.append(tar_path)
             
             # Extract all tarballs
             for tar_path in downloaded_tarballs:
-                print(f"Extracting {tar_path.name}...")
+                logger.info(f"Extracting {tar_path.name}...")
                 self.extract_tarball(tar_path, db_dir)
-                print(f"Extracted {tar_path.name}")
+                logger.info(f"Extracted {tar_path.name}")
             
-            return True, f"Successfully downloaded and extracted database to {db_dir}"
+            msg = f"Successfully downloaded and extracted database to {db_dir}"
+            logger.info(msg)
+            return True, msg
             
         except URLError as e:
             return False, f"Network error: {e}"
@@ -254,15 +286,16 @@ class NCBIDownloader:
             return False, f"Error during download/extraction: {e}"
 
 
-def setup_ncbi_database(force_download: bool = False) -> Tuple[bool, str]:
+def setup_ncbi_database(force_download: bool = False, verbose: bool = True) -> Tuple[bool, str]:
     """
     Convenience function to setup the NCBI core_nt database.
     
     Args:
         force_download: If True, downloads even if database exists
+        verbose: If True, logs progress information (default: True)
         
     Returns:
         Tuple of (success: bool, message: str)
     """
     downloader = NCBIDownloader()
-    return downloader.download_and_setup_database(force_download)
+    return downloader.download_and_setup_database(force_download, verbose)

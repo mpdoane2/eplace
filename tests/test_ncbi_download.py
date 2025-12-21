@@ -149,6 +149,47 @@ class TestNCBIDownloader:
             assert extracted_file.exists()
             assert extracted_file.read_text() == "Test content"
     
+    def test_extract_tarball_with_unsafe_path(self):
+        """Test tarball extraction rejects unsafe paths."""
+        import tarfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create a test file
+            test_file = tmppath / "test.txt"
+            test_file.write_text("Test content")
+            
+            # Create tarball with path traversal
+            tarball_path = tmppath / "unsafe.tar.gz"
+            with tarfile.open(tarball_path, 'w:gz') as tar:
+                tar.add(test_file, arcname="../../../evil.txt")
+            
+            # Try to extract
+            extract_dir = tmppath / "extracted"
+            extract_dir.mkdir()
+            
+            downloader = NCBIDownloader()
+            with pytest.raises(ValueError, match="Unsafe path in tarball"):
+                downloader.extract_tarball(tarball_path, extract_dir)
+    
+    def test_download_file_with_unsafe_filename(self):
+        """Test download_file rejects unsafe filenames."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            downloader = NCBIDownloader()
+            
+            # Test path traversal attempts
+            with pytest.raises(ValueError, match="Invalid filename"):
+                downloader.download_file("../../../etc/passwd", tmppath)
+            
+            with pytest.raises(ValueError, match="Invalid filename"):
+                downloader.download_file("/etc/passwd", tmppath)
+            
+            with pytest.raises(ValueError, match="Invalid filename"):
+                downloader.download_file("..\\..\\windows\\system32", tmppath)
+    
     @patch('eplace_lib.ncbi_download.urlopen')
     def test_get_available_files(self, mock_urlopen):
         """Test getting available files from FTP server."""
@@ -191,7 +232,7 @@ class TestSetupNCBIDatabase:
         
         assert success is True
         assert message == "Success"
-        mock_setup.assert_called_once_with(False)
+        mock_setup.assert_called_once_with(False, True)
     
     @patch('eplace_lib.ncbi_download.NCBIDownloader.download_and_setup_database')
     def test_setup_ncbi_database_with_force(self, mock_setup):
@@ -201,4 +242,14 @@ class TestSetupNCBIDatabase:
         success, message = setup_ncbi_database(force_download=True)
         
         assert success is True
-        mock_setup.assert_called_once_with(True)
+        mock_setup.assert_called_once_with(True, True)
+    
+    @patch('eplace_lib.ncbi_download.NCBIDownloader.download_and_setup_database')
+    def test_setup_ncbi_database_with_verbose(self, mock_setup):
+        """Test setup_ncbi_database with verbose parameter."""
+        mock_setup.return_value = (True, "Success")
+        
+        success, message = setup_ncbi_database(verbose=False)
+        
+        assert success is True
+        mock_setup.assert_called_once_with(False, False)
