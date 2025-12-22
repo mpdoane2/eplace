@@ -6,10 +6,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
+from collections import defaultdict
 
-from eplace_lib.blast_analysis import run_blast_search, FastaReader
+from eplace_lib.blast_analysis import run_blast_search, FastaReader, BlastHit
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy
-from eplace_lib import BlastHit
 
 
 class TestBlastWorkflow:

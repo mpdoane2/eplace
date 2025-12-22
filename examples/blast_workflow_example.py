@@ -14,6 +14,7 @@ import sys
 import argparse
 import logging
 from pathlib import Path
+from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy
@@ -178,7 +179,6 @@ Notes:
     
     # Step 3: Group hits by query and display summary
     logger.info("\n[Step 3/4] Analyzing BLAST results...")
-    from collections import defaultdict
     hits_by_query = defaultdict(int)
     for hit in filtered_hits:
         hits_by_query[hit.query_id] += 1
