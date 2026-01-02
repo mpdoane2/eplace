@@ -49,6 +49,8 @@ class BlastHit:
     evalue: float
     bit_score: float
     query_coverage: float
+    subject_taxid: int
+    subject_taxids: str
 
 
 class FastaReader:
@@ -166,7 +168,7 @@ class BlastRunner:
         num_threads: int = 1,
         max_target_seqs: int = 100,
         evalue: float = 1e-5,
-        outfmt: str = "6 qseqid sseqid pident length qlen slen qstart qend sstart send evalue bitscore"
+        outfmt: str = "6 qseqid sseqid pident length qlen slen qstart qend sstart send evalue bitscore staxid staxids"
     ) -> bool:
         """
         Run blastn search.
@@ -282,6 +284,8 @@ class BlastRunner:
                     subject_end = int(fields[9])
                     evalue = float(fields[10])
                     bit_score = float(fields[11])
+                    staxid = int(fields[12])
+                    staxids = fields[13]
                     
                     # Calculate query coverage
                     query_coverage = (abs(query_end - query_start) + 1) / query_length * 100
@@ -299,7 +303,9 @@ class BlastRunner:
                         subject_end=subject_end,
                         evalue=evalue,
                         bit_score=bit_score,
-                        query_coverage=query_coverage
+                        query_coverage=query_coverage,
+                        staxid=staxid,
+                        staxids=staxids
                     )
                     hits.append(hit)
                     
