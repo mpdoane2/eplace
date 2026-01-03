@@ -20,7 +20,7 @@ mamba install -y bioconda::blast bioconda::pytaxonkit
 > Note 2.
 > You will need to download and set up the NCBI taxonomy databases for pytaxonkit, but that is well documented.
 
-3. Get eplace and install
+3. Get and install eplace
 
 ```
 pip install git+https://github.com/linsalrob/eplace.git
