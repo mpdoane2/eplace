@@ -388,7 +388,7 @@ def run_blast_search(
 
     if os.path.exists(output_file) and skip_existing:
         logger.info(f"The blast output file {output_file} already exists. Skipping and using these results")
-        return True
+        return True, []
 
     runner = BlastRunner(blastdb_path)
     

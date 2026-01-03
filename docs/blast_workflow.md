@@ -102,7 +102,8 @@ print(f"Filtered {len(hits)} hits to {len(filtered_hits)} hits")
 ```python
 from eplace_lib.taxonomy import TaxonomyExtractor
 
-extractor = TaxonomyExtractor()
+# Initialize extractor with desired rank
+extractor = TaxonomyExtractor(rank="species")
 
 # Group hits by query
 grouped_hits = extractor.group_hits_by_query(blast_hits)
@@ -111,7 +112,6 @@ grouped_hits = extractor.group_hits_by_query(blast_hits)
 for query_id, query_hits in grouped_hits.items():
     representatives = extractor.select_representatives_by_rank(
         hits=query_hits,
-        rank="species",  # Taxonomic rank
         max_per_rank=1   # Number per rank
     )
     print(f"{query_id}: {len(representatives)} representatives")
@@ -201,19 +201,16 @@ Represents a single BLAST hit with the following attributes:
 - `bit_score`: Bit score
 - `query_coverage`: Percentage of query covered by alignment
 
-### TaxonomicInfo
+### Taxonomic information on `BlastHit`
 
-Represents taxonomic information for a sequence:
+The `BlastHit` dataclass includes the following taxonomic fields:
 
-- `sequence_id`: Sequence identifier
-- `taxid`: NCBI taxonomy ID
-- `kingdom`: Kingdom name
-- `phylum`: Phylum name
-- `class_name`: Class name
-- `order`: Order name
-- `family`: Family name
-- `genus`: Genus name
-- `species`: Species name
+- `subject_taxid`: Primary NCBI taxonomy ID for the subject sequence
+- `subject_taxids`: All taxonomy IDs associated with the subject sequence (if available)
+- `subject_rank_tid`: Taxonomy ID at the selected rank (e.g. species, genus), used for grouping
+- `subject_rank_name`: Name of the taxon at the selected rank (e.g. species name)
+
+These fields are used when filtering BLAST results by taxonomy and selecting representative sequences per rank.
 
 ## Requirements
 

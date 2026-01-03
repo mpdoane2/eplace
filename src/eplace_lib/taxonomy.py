@@ -33,16 +33,15 @@ class TaxonomyExtractor:
             raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
         self.rank = rank
     
-    def parse_taxids(self, tax_ids: list[int]) -> dict[int, str]:
+    def parse_taxids(self, tax_ids: list[int]) -> dict[int, tuple[str, str]]:
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
-        and return a dict of the taxids and their name based on the rank
 
         Args:
             tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
-            the taxonomy infomation for that rank.
+            the taxonomy information for that rank as dict mapping taxid to (rank_taxid, rank_name)
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
@@ -57,7 +56,6 @@ class TaxonomyExtractor:
         df['taxids'] = df['FullLineageTaxIDs'].str.split(';')
         df['ranks'] = df['FullLineageRanks'].str.split(';')
         long_df = df.explode(['names', 'taxids', 'ranks'])
-        # this creates a dict of the query taxid to a tuple of the rank's taxid and genus_name
         rank_dict = {
                 str(tid): (str(taxid), str(name))
                 for tid, taxid, name in (
@@ -102,9 +100,6 @@ class TaxonomyExtractor:
             
         Returns:
             list of representative BlastHit objects
-            
-        Raises:
-            ValueError: If rank is not valid
         """
         
         # Group hits by taxonomic rank (using subject_id as proxy)
