@@ -9,7 +9,7 @@ import os
 import subprocess
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict
 from collections import defaultdict
 from dataclasses import dataclass
 
