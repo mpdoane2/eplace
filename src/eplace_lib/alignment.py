@@ -461,8 +461,7 @@ def process_query_alignment_and_tree(
     
     # Step 2: Trim sequences based on BLAST coordinates
     logger.info(f"Trimming sequences for {query_id}...")
-    trimmer = SequenceTrimmer()
-    if trimmer.trim_sequences_from_blast_hits(
+    if SequenceTrimmer.trim_sequences_from_blast_hits(
         fasta_path=combined_fasta,
         blast_hits=blast_hits,
         output_fasta=trimmed_fasta,
@@ -476,8 +475,7 @@ def process_query_alignment_and_tree(
     
     # Step 3: Align sequences with MAFFT
     logger.info(f"Aligning sequences for {query_id}...")
-    aligner = MAFFTAligner()
-    if aligner.align_sequences(
+    if MAFFTAligner.align_sequences(
         input_fasta=trimmed_fasta,
         output_fasta=alignment_fasta,
         auto_orient=True,
@@ -491,8 +489,7 @@ def process_query_alignment_and_tree(
     
     # Step 4: Build phylogenetic tree with IQTree
     logger.info(f"Building phylogenetic tree for {query_id}...")
-    tree_builder = IQTreeBuilder()
-    if tree_builder.build_tree(
+    if IQTreeBuilder.build_tree(
         alignment_fasta=alignment_fasta,
         output_prefix=tree_prefix,
         num_threads=num_threads
@@ -505,7 +502,7 @@ def process_query_alignment_and_tree(
     
     # Step 5: Relabel tree with taxonomic names
     logger.info(f"Relabeling tree with taxonomic names for {query_id}...")
-    if tree_builder.relabel_tree_with_taxonomy(
+    if IQTreeBuilder.relabel_tree_with_taxonomy(
         tree_file=tree_file,
         blast_hits=blast_hits,
         output_tree=labeled_tree
