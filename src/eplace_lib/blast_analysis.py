@@ -84,7 +84,7 @@ class BlastHit:
             parts = self.subject_id.split('|')
             
             # Handle gnl|database|identifier format separately
-            if parts[0] == 'gnl' and len(parts) >= 3:
+            if len(parts) >= 3 and parts[0] == 'gnl':
                 return parts[2]
             
             # Look for standard database identifiers
@@ -97,8 +97,9 @@ class BlastHit:
                         return parts[i + 1]
             
             # If no known database identifier found, try to return a reasonable fallback
-            # Filter out empty strings and known prefixes
-            non_empty = [p for p in parts if p and p not in ['gi']]
+            # Filter out empty strings and known non-accession prefixes
+            known_prefixes = ['gi']
+            non_empty = [p for p in parts if p and p not in known_prefixes]
             if non_empty:
                 # Return the last non-empty part (most likely to be the accession)
                 return non_empty[-1]
