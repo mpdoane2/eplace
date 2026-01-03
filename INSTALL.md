@@ -18,7 +18,7 @@ mamba install -y bioconda::blast bioconda::pytaxonkit
 
 
 > Note 2.
-> You will need to download and set up the NCBI taxonomy databases for pytaxonkit; see the [pytaxonkit documentation](https://github.com/bioforensics/pytaxonkit#setting-up-the-ncbi-taxonomy-database) for detailed instructions.
+> You will need to download and set up the NCBI taxonomy databases for pytaxonkit; see the [taxonkit documentation](https://bioinf.shenwei.me/taxonkit/usage/#before-use) for detailed instructions of which NCBI taxonomy files to download.
 
 3. Get and install eplace
 
