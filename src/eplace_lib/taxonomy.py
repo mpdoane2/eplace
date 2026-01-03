@@ -322,9 +322,13 @@ def process_blast_results_for_taxonomy(
 
     # add all the ranks to all the hits
     for h in blast_hits:
-        h.subject_rank_tid = taxonomies.get(h.subject_taxid)[0] if h.subject_taxid in taxonomies else None
-        h.subject_rank_name = taxonomies.get(h.subject_taxid)[1] if h.subject_taxid in taxonomies else None
-    
+        tax_info = taxonomies.get(h.subject_taxid)
+        if isinstance(tax_info, (list, tuple)) and len(tax_info) >= 2:
+            h.subject_rank_tid = tax_info[0]
+            h.subject_rank_name = tax_info[1]
+        else:
+            h.subject_rank_tid = None
+            h.subject_rank_name = None
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
     
