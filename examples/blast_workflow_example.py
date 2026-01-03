@@ -138,7 +138,7 @@ Notes:
     logger.info(f"Taxonomic rank: {args.rank}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
-    logger.info(f"Overwrite: {args.overwrite} (skip_existing: {skip_existing})")
+    logger.info(f"Overwrite: {args.overwrite_existing_blast} (skip_existing: {skip_existing})")
     logger.info(f"Database: {args.database}")
     logger.info(f"Threads: {args.num_threads}")
     
