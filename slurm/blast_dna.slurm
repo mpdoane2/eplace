@@ -13,7 +13,7 @@ set -euo pipefail
 trap 's=$?; echo "$0: Error on line "$LINENO": $BASH_COMMAND"; exit $s' ERR
 
 eval "$(conda shell.bash hook)"
-conda activate eplace
+conda activate eplace2
 
 if [[ $# != 2 ]]; then echo "$0  <fasta file> <output dir> " >&2; exit 1; fi
 
