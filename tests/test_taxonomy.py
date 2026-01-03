@@ -494,8 +494,9 @@ class TestRewriteBlastHits:
             assert len(lines) == 2  # header + 1 data line
             
             # Check data line - None values should be empty strings
-            # Use rstrip to remove newline but keep trailing tabs, then split
+            # Remove only newline to preserve tab-delimited format
             data = lines[1].rstrip('\n').split('\t')
+            assert len(data) == 19  # Verify all fields present
             assert data[0] == "seq1"
             assert data[15] == ""  # subject_rank_tid
             assert data[16] == ""  # subject_rank_name
@@ -569,9 +570,17 @@ class TestRewriteBlastHits:
             # Should only have header, no data lines
             assert len(lines) == 1
             
-            # Check header exists
+            # Check header exists with all expected fields
+            expected_fields = [
+                "query_id", "subject_id", "percent_identity", "alignment_length",
+                "query_length", "subject_length", "query_start", "query_end",
+                "subject_start", "subject_end", "evalue", "bit_score",
+                "query_coverage", "subject_taxid", "subject_taxids",
+                "subject_rank_tid", "subject_rank_name",
+                "subject_phylum_tid", "subject_phylum_name"
+            ]
             header = lines[0].strip().split('\t')
-            assert len(header) == 19  # All field names
+            assert header == expected_fields
     
     def test_rewrite_blast_hits_multiple_records(self):
         """Test writing multiple blast hits."""
