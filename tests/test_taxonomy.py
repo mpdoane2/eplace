@@ -19,7 +19,7 @@ class TestTaxonomyExtractor:
     """Test cases for TaxonomyExtractor class."""
     
     def setup_method(self):
-        self.taxonomyextractor = TaxonomyExtractor("genus")
+        self.taxonomy_extractor = TaxonomyExtractor("genus")
         self.hits = [
             BlastHit(
                 query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
@@ -80,7 +80,7 @@ class TestTaxonomyExtractor:
     def test_parse_taxids(self):
         """Test parsing a simple sequence ID."""
         seq_id = "NC_001234.5"
-        tax_info = self.taxonomyextractor.parse_taxids([9606, 590])
+        tax_info = self.taxonomy_extractor.parse_taxids([9606, 590])
 
         homo_tuple = ('9605', 'Homo')
         salm_tuple = ('590', 'Salmonella')
@@ -91,7 +91,7 @@ class TestTaxonomyExtractor:
         """Test grouping BLAST hits by query."""
         hits = self.hits
         
-        extractor = self.taxonomyextractor
+        extractor = self.taxonomy_extractor
         grouped = extractor.group_hits_by_query(hits)
         
         assert len(grouped) == 3
@@ -102,7 +102,7 @@ class TestTaxonomyExtractor:
         """Test selecting representatives by valid rank."""
         hits = self.hits
         
-        extractor = self.taxonomyextractor
+        extractor = self.taxonomy_extractor
         representatives = extractor.select_representatives_by_rank(
             hits=hits
         )
@@ -114,7 +114,7 @@ class TestTaxonomyExtractor:
     
     def test_select_representatives_empty_hits(self):
         """Test selecting representatives from empty hits list."""
-        extractor = self.taxonomyextractor
+        extractor = self.taxonomy_extractor
         representatives = extractor.select_representatives_by_rank(
             hits=[],
         )
