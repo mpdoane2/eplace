@@ -17,7 +17,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
-from eplace_lib.taxonomy import process_blast_results_for_taxonomy
+from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits
 
 # Configure logging
 logging.basicConfig(
@@ -108,7 +108,7 @@ Notes:
 
     parser.add_argument(
         '--overwrite_existing_blast',
-        action='store_true',.
+        action='store_true',
         help='If the blast results already exist, redo the search and overwrite them'
     )
     
@@ -128,7 +128,7 @@ Notes:
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
-    skip_existing = ! args.overwrite_existing_blast
+    skip_existing = not args.overwrite_existing_blast
 
     logger.info("=" * 60)
     logger.info("ePLACE BLAST Workflow")
@@ -138,7 +138,7 @@ Notes:
     logger.info(f"Taxonomic rank: {args.rank}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
-    logger.info(f"Overwrite: {args.overwrite} (skip_existing: {skip_existing})")
+    logger.info(f"Overwrite: {args.overwrite_existing_blast} (skip_existing: {skip_existing})")
     logger.info(f"Database: {args.database}")
     logger.info(f"Threads: {args.num_threads}")
     
@@ -218,7 +218,18 @@ Notes:
     except Exception as e:
         logger.error(f"Error extracting sequences: {e}")
         sys.exit(1)
-    
+
+    logger.info("Rewriting the blast output file with the new annotations")
+    try:
+        rewrite_blast_hits(
+            blast_hits=filtered_hits,
+            output_file=args.output_dir / "blast_results_annotated.txt",
+            header=True
+        )
+    except Exception as e:
+        logger.error(f"Error rewriting the blast hits: {e}")
+        sys.exit(1)
+
     logger.info("\n" + "=" * 60)
     logger.info("Workflow completed successfully!")
     logger.info("=" * 60)
