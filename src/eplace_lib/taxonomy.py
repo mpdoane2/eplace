@@ -339,7 +339,7 @@ def process_blast_results_for_taxonomy(
             hits=query_hits,
         )
         if len(representatives) == 0:
-            logger.warn(f"Error: No representative sequences for {query_id} at rank {rank}")
+            logger.warning(f"Error: No representative sequences for {query_id} at rank {rank}")
             continue
         
         # Create query-specific output directory
