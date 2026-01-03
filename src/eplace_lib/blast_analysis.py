@@ -390,11 +390,11 @@ def run_blast_search(
         Tuple of (success: bool, filtered_hits: list[BlastHit])
     """
 
+    runner = BlastRunner(blastdb_path)
+
     if os.path.exists(output_file) and skip_existing:
         logger.info(f"The blast output file {output_file} already exists. Skipping and using these results")
-    else:
-        runner = BlastRunner(blastdb_path)
-        
+    else:    
         # Run BLAST
         success = runner.run_blastn(
             query_fasta=query_fasta,
