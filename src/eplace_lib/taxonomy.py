@@ -41,8 +41,9 @@ class TaxonomyExtractor:
             tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
-            the taxonomy information for that rank as dict mapping taxid to (rank_taxid, rank_name) and
-            the phylum information for the subject with a dict mapping the taxid to (phylum_taxid, phylum_name)
+            tuple containing:
+                - dict[str, tuple[str, str]]: mapping taxid to (rank_taxid, rank_name) for the specified rank
+                - dict[str, tuple[str, str]]: mapping taxid to (phylum_taxid, phylum_name)
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
