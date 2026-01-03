@@ -17,4 +17,4 @@ conda activate eplace2
 
 if [[ $# != 2 ]]; then echo "$0  <fasta file> <output dir> " >&2; exit 1; fi
 
-python examples/blast_workflow_example.py --rank genus --num-threads 32 $1 $2
+python examples/blast_workflow_example.py --rank genus --num-threads 64 $1 $2
