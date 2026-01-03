@@ -3,7 +3,7 @@
 1. Create a conda environment for ePLACE:
 
 ```
-mamba create -yn eplace 'python>3.12'
+mamba create -yn eplace 'python>=3.12'
 ```
 
 2. Install the required dependencies
