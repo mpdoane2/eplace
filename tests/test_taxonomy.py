@@ -311,8 +311,9 @@ class TestSequenceExtractor:
 class TestProcessBlastResultsForTaxonomy:
     """Test cases for process_blast_results_for_taxonomy function."""
     
+    @patch('eplace_lib.taxonomy.TaxonomyExtractor.parse_taxids')
     @patch('eplace_lib.taxonomy.SequenceExtractor.extract_representatives_for_query')
-    def test_process_blast_results_for_taxonomy(self, mock_extract):
+    def test_process_blast_results_for_taxonomy(self, mock_extract, mock_parse_taxids):
         """Test processing BLAST results for taxonomy."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -374,6 +375,20 @@ class TestProcessBlastResultsForTaxonomy:
                 )
             ]
             
+            # Mock parse_taxids to return taxonomy and phylum info
+            mock_parse_taxids.return_value = (
+                {
+                    "149539": ("590", "Salmonella"),
+                    "9606": ("9605", "Homo"),
+                    "9597": ("9596", "Pan")
+                },
+                {
+                    "149539": ("1224", "Pseudomonadota"),
+                    "9606": ("7711", "Chordata"),
+                    "9597": ("7711", "Chordata")
+                }
+            )
+            
             mock_extract.return_value = tmppath / "output.fasta"
             
             results = process_blast_results_for_taxonomy(
@@ -385,4 +400,17 @@ class TestProcessBlastResultsForTaxonomy:
             assert len(results) == 3
             assert 'seq1' in results
             assert 'seq2' in results
+            
+            # Verify phylum information is correctly set on blast hits
+            # seq1 has taxid 149539 (Salmonella) which should map to Pseudomonadota phylum
+            assert hits[0].subject_phylum_tid == '1224'
+            assert hits[0].subject_phylum_name == 'Pseudomonadota'
+            
+            # seq2 has taxid 9606 (Homo sapiens) which should map to Chordata phylum
+            assert hits[1].subject_phylum_tid == '7711'
+            assert hits[1].subject_phylum_name == 'Chordata'
+            
+            # seq3 has taxid 9597 (Pan) which should also map to Chordata phylum
+            assert hits[2].subject_phylum_tid == '7711'
+            assert hits[2].subject_phylum_name == 'Chordata'
     
