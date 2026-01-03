@@ -18,6 +18,7 @@ from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits
+from eplace_lib.alignment import process_query_alignment_and_tree
 
 # Configure logging
 logging.basicConfig(
@@ -113,6 +114,12 @@ Notes:
     )
     
     parser.add_argument(
+        '--skip-alignment',
+        action='store_true',
+        help='Skip the alignment and tree building steps'
+    )
+    
+    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Display what would be done without actually running BLAST'
@@ -150,7 +157,7 @@ Notes:
     logger.info("=" * 60)
     
     # Step 1: Read query sequences
-    logger.info("\n[Step 1/4] Reading query sequences...")
+    logger.info("\n[Step 1/5] Reading query sequences...")
     try:
         sequences = FastaReader.read_fasta(args.query_fasta)
         logger.info(f"Found {len(sequences)} query sequences")
@@ -161,7 +168,7 @@ Notes:
         sys.exit(1)
     
     # Step 2: Run BLAST search
-    logger.info("\n[Step 2/4] Running BLAST search...")
+    logger.info("\n[Step 2/5] Running BLAST search...")
     blast_output = args.output_dir / "blast_results.txt"
     
     try:
@@ -188,7 +195,7 @@ Notes:
         sys.exit(1)
     
     # Step 3: Group hits by query and display summary
-    logger.info("\n[Step 3/4] Analyzing BLAST results...")
+    logger.info("\n[Step 3/5] Analyzing BLAST results...")
     hits_by_query = defaultdict(int)
     for hit in filtered_hits:
         hits_by_query[hit.query_id] += 1
@@ -197,7 +204,7 @@ Notes:
         logger.info(f"  {query_id}: {count} hits")
     
     # Step 4: Extract representative sequences
-    logger.info(f"\n[Step 4/4] Extracting representative sequences (rank: {args.rank})...")
+    logger.info(f"\n[Step 4/5] Extracting representative sequences (rank: {args.rank})...")
     
     try:
         results = process_blast_results_for_taxonomy(
@@ -229,6 +236,56 @@ Notes:
     except Exception as e:
         logger.error(f"Error rewriting the blast hits: {e}")
         sys.exit(1)
+
+    # Step 5: Align sequences and build trees (if not skipped)
+    if not args.skip_alignment:
+        logger.info("\n[Step 5/5] Aligning sequences and building phylogenetic trees...")
+        
+        # Group hits by query for processing
+        hits_by_query_map = defaultdict(list)
+        for hit in filtered_hits:
+            hits_by_query_map[hit.query_id].append(hit)
+        
+        alignment_results = {}
+        for query_id, query_hits in hits_by_query_map.items():
+            logger.info(f"\nProcessing alignment and tree for query: {query_id}")
+            
+            # Get the query directory
+            safe_query_id = query_id.replace('|', '_').replace('/', '_')
+            query_dir = args.output_dir / safe_query_id
+            
+            if not query_dir.exists():
+                logger.warning(f"Query directory not found: {query_dir}")
+                continue
+            
+            # Process alignment and tree
+            try:
+                result = process_query_alignment_and_tree(
+                    query_id=query_id,
+                    query_dir=query_dir,
+                    blast_hits=query_hits,
+                    query_fasta=args.query_fasta,
+                    num_threads=args.num_threads
+                )
+                alignment_results[query_id] = result
+                
+                # Log results
+                if result['labeled_tree']:
+                    logger.info(f"  ✓ Labeled tree: {result['labeled_tree']}")
+                elif result['tree']:
+                    logger.info(f"  ✓ Tree: {result['tree']}")
+                if result['alignment']:
+                    logger.info(f"  ✓ Alignment: {result['alignment']}")
+                if result['trimmed_fasta']:
+                    logger.info(f"  ✓ Trimmed sequences: {result['trimmed_fasta']}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing {query_id}: {e}")
+                continue
+        
+        logger.info(f"\nAlignment and tree building completed for {len(alignment_results)} queries")
+    else:
+        logger.info("\n[Step 5/5] Skipping alignment and tree building (--skip-alignment)")
 
     logger.info("\n" + "=" * 60)
     logger.info("Workflow completed successfully!")
