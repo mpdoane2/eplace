@@ -5,7 +5,6 @@ Integration tests for the complete BLAST workflow.
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-import pytest
 from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader, BlastHit
