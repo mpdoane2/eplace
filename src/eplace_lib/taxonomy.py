@@ -111,9 +111,11 @@ class TaxonomyExtractor:
         # Group hits by taxonomic rank (using subject_id as proxy)
         rank_groups = defaultdict(list)
         
+        reported_hits = set()
         for hit in hits:
-            if hit.subject_rank_tid:
+            if hit.subject_rank_tid and hit.subject_rank_name not in reported_hits:
                 logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
+                reported_hits.add(hit.subject_rank_name)
                 rank_groups[hit.subject_rank_tid].append(hit)
             else:
                 logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
