@@ -108,7 +108,7 @@ Notes:
 
     parser.add_argument(
         '--overwrite_existing_blast',
-        action='store_true',.
+        action='store_true',
         help='If the blast results already exist, redo the search and overwrite them'
     )
     
