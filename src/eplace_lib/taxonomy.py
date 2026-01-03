@@ -321,7 +321,6 @@ def rewrite_blast_hits(
         "subject_phylum_tid", "subject_phylum_name",
     ]
 
-
     with open(output_file, 'w') as out:
         if header:
             print("\t".join(fields), file=out)
