@@ -122,6 +122,82 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
             assert '>query1' in content
             assert '>subject1 TestGenus' in content
             assert '>subject2 AnotherGenus' in content
+    
+    def test_trim_sequences_with_gi_format_blast_hits(self):
+        """Test trimming when BLAST hits have gi|...|gb|...| format but FASTA has accessions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create test FASTA with accession-only IDs (like blastdbcmd output)
+            fasta_path = tmppath / "test.fasta"
+            fasta_content = """>query1
+ATCGATCGATCGATCGATCGATCGATCGATCGATCG
+>MZ387488.1
+NNNNNATCGATCGATCGATCGATCGATCGNNNNNNNNNN
+>NZ_CP123456.1
+GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
+"""
+            fasta_path.write_text(fasta_content)
+            
+            # Create BLAST hits with full gi|...|gb|...| format
+            blast_hits = [
+                BlastHit(
+                    query_id='query1',
+                    subject_id='gi|2273658778|gb|MZ387488.1|',  # Full format
+                    percent_identity=95.0,
+                    alignment_length=30,
+                    query_length=36,
+                    subject_length=40,
+                    query_start=1,
+                    query_end=30,
+                    subject_start=6,
+                    subject_end=35,
+                    evalue=1e-10,
+                    bit_score=100,
+                    query_coverage=83.3,
+                    subject_taxid="12345",
+                    subject_taxids="12345",
+                    subject_rank_tid="123",
+                    subject_rank_name="TestGenus"
+                ),
+                BlastHit(
+                    query_id='query1',
+                    subject_id='ref|NZ_CP123456.1|',  # ref format
+                    percent_identity=90.0,
+                    alignment_length=20,
+                    query_length=36,
+                    subject_length=30,
+                    query_start=5,
+                    query_end=24,
+                    subject_start=1,
+                    subject_end=20,
+                    evalue=1e-8,
+                    bit_score=80,
+                    query_coverage=55.6,
+                    subject_taxid="67890",
+                    subject_taxids="67890",
+                    subject_rank_tid="678",
+                    subject_rank_name="AnotherGenus"
+                )
+            ]
+            
+            # Trim sequences - should match accessions correctly
+            output_fasta = tmppath / "trimmed.fasta"
+            success = SequenceTrimmer.trim_sequences_from_blast_hits(
+                fasta_path=fasta_path,
+                blast_hits=blast_hits,
+                output_fasta=output_fasta,
+                query_id='query1'
+            )
+            
+            assert success is True
+            assert output_fasta.exists()
+            
+            # Read and verify output
+            content = output_fasta.read_text()
+            assert '>query1' in content
+            assert '>MZ387488.1 TestGenus' in content
+            assert '>NZ_CP123456.1 AnotherGenus' in content
 
 
 class TestMAFFTAligner:

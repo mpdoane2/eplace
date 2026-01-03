@@ -61,6 +61,36 @@ class BlastHit:
     subject_rank_name: Optional[str] = None
     subject_phylum_tid: Optional[str] = None
     subject_phylum_name: Optional[str] = None
+    
+    def get_accession(self) -> str:
+        """
+        Extract the accession number from the subject_id.
+        
+        BLAST IDs can be in various formats:
+        - gi|2273658778|gb|MZ387488.1| -> MZ387488.1
+        - ref|NZ_CP123456.1| -> NZ_CP123456.1
+        - MZ387488.1 -> MZ387488.1 (already in accession format)
+        
+        Returns:
+            The accession number extracted from subject_id
+        """
+        # If the ID contains pipes, it's in the gi|...|db|accession| format
+        if '|' in self.subject_id:
+            parts = self.subject_id.split('|')
+            # Look for the accession, which is typically after a database identifier
+            # Common formats: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|
+            for i, part in enumerate(parts):
+                if part in ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr', 'gnl']:
+                    # Next part should be the accession
+                    if i + 1 < len(parts):
+                        return parts[i + 1]
+            # If no database identifier found, return the last non-empty part
+            non_empty = [p for p in parts if p]
+            if non_empty:
+                return non_empty[-1]
+        
+        # If no pipes, assume it's already an accession
+        return self.subject_id
 
 class FastaReader:
     """

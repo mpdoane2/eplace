@@ -85,8 +85,9 @@ class SequenceTrimmer:
             # Read all sequences from the input FASTA
             sequences = FastaReader.read_fasta(fasta_path)
             
-            # Create a mapping of subject_id to blast hits for quick lookup
-            hit_map = {hit.subject_id: hit for hit in blast_hits}
+            # Create a mapping of subject accession to blast hits for quick lookup
+            # The FASTA file will have accessions (e.g., MZ387488.1) not full IDs
+            hit_map = {hit.get_accession(): hit for hit in blast_hits}
             
             # Open output file
             with open(output_fasta, 'w') as out:
@@ -104,7 +105,8 @@ class SequenceTrimmer:
                     if seq_id == query_id:
                         continue  # Skip query, already written
                     
-                    # Find the corresponding BLAST hit
+                    # Find the corresponding BLAST hit by accession
+                    # The seq_id from FASTA should match the accession from the hit
                     hit = hit_map.get(seq_id)
                     
                     if hit is None:
@@ -354,7 +356,8 @@ class IQTreeBuilder:
             True if successful, False otherwise
         """
         try:
-            # Create mapping of sequence ID to taxonomic name
+            # Create mapping of sequence accession to taxonomic name
+            # Trees will have accessions (e.g., MZ387488.1) not full IDs
             label_map = {}
             for hit in blast_hits:
                 label = getattr(hit, label_field, None)
@@ -367,10 +370,12 @@ class IQTreeBuilder:
                                   .replace(')', '_')
                                   .replace(',', '_')
                                   .replace(';', '_'))
-                    label_map[hit.subject_id] = clean_label
+                    # Use accession for mapping since that's what appears in trees
+                    accession = hit.get_accession()
+                    label_map[accession] = clean_label
                     # Also handle potential header prefixes from trimmed files
                     if hit.subject_rank_name:
-                        header_with_tax = f"{hit.subject_id} {hit.subject_rank_name}"
+                        header_with_tax = f"{accession} {hit.subject_rank_name}"
                         label_map[header_with_tax] = clean_label
             
             # Read the tree file
