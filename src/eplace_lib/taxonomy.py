@@ -120,7 +120,7 @@ class TaxonomyExtractor:
                 logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
                 reported_hits.add(hit.subject_rank_name)
                 rank_groups[hit.subject_rank_tid].append(hit)
-            else:
+            elif not hit.subject_rank_tid:
                 logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
         
         # Select best representative from each rank
