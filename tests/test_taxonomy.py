@@ -78,8 +78,7 @@ class TestTaxonomyExtractor:
         ]
 
     def test_parse_taxids(self):
-        """Test parsing a simple sequence ID."""
-        seq_id = "NC_001234.5"
+        """Test parsing taxonomy IDs"""
         tax_info = self.taxonomy_extractor.parse_taxids([9606, 590])
 
         homo_tuple = ('9605', 'Homo')
