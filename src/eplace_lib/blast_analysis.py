@@ -388,21 +388,20 @@ def run_blast_search(
 
     if os.path.exists(output_file) and skip_existing:
         logger.info(f"The blast output file {output_file} already exists. Skipping and using these results")
-        return True, []
-
-    runner = BlastRunner(blastdb_path)
-    
-    # Run BLAST
-    success = runner.run_blastn(
-        query_fasta=query_fasta,
-        output_file=output_file,
-        database=database,
-        num_threads=num_threads
-    )
-    
-    if not success:
-        return False, []
-    
+    else:
+        runner = BlastRunner(blastdb_path)
+        
+        # Run BLAST
+        success = runner.run_blastn(
+            query_fasta=query_fasta,
+            output_file=output_file,
+            database=database,
+            num_threads=num_threads
+        )
+        
+        if not success:
+            return False, []
+        
     # Parse results
     try:
         hits = runner.parse_blast_results(output_file)
