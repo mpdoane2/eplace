@@ -17,7 +17,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
-from eplace_lib.taxonomy import process_blast_results_for_taxonomy
+from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits
 
 # Configure logging
 logging.basicConfig(
