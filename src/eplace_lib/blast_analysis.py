@@ -69,27 +69,41 @@ class BlastHit:
         BLAST IDs can be in various formats:
         - gi|2273658778|gb|MZ387488.1| -> MZ387488.1
         - ref|NZ_CP123456.1| -> NZ_CP123456.1
+        - gb|MZ387488.1| -> MZ387488.1
         - MZ387488.1 -> MZ387488.1 (already in accession format)
         
+        Note: gnl|database|identifier format is handled by returning the identifier,
+        but these may not be standard accessions.
+        
         Returns:
-            The accession number extracted from subject_id
+            The accession number extracted from subject_id, or the full subject_id
+            if no standard format is detected
         """
-        # If the ID contains pipes, it's in the gi|...|db|accession| format
+        # If the ID contains pipes, it's in a structured format
         if '|' in self.subject_id:
             parts = self.subject_id.split('|')
-            # Look for the accession, which is typically after a database identifier
+            
+            # Handle gnl|database|identifier format separately
+            if parts[0] == 'gnl' and len(parts) >= 3:
+                return parts[2]
+            
+            # Look for standard database identifiers
             # Common formats: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|
+            db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
             for i, part in enumerate(parts):
-                if part in ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr', 'gnl']:
+                if part in db_identifiers:
                     # Next part should be the accession
-                    if i + 1 < len(parts):
+                    if i + 1 < len(parts) and parts[i + 1]:
                         return parts[i + 1]
-            # If no database identifier found, return the last non-empty part
-            non_empty = [p for p in parts if p]
+            
+            # If no known database identifier found, try to return a reasonable fallback
+            # Filter out empty strings and known prefixes
+            non_empty = [p for p in parts if p and p not in ['gi']]
             if non_empty:
+                # Return the last non-empty part (most likely to be the accession)
                 return non_empty[-1]
         
-        # If no pipes, assume it's already an accession
+        # If no pipes or couldn't parse, assume it's already an accession
         return self.subject_id
 
 class FastaReader:

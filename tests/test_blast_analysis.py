@@ -413,3 +413,24 @@ class TestBlastHit:
             subject_taxids="12345"
         )
         assert hit.get_accession() == "MZ387488.1"
+    
+    def test_get_accession_gnl_format(self):
+        """Test extracting identifier from gnl|database|identifier format."""
+        hit = BlastHit(
+            query_id="test",
+            subject_id="gnl|BL_ORD_ID|12345",
+            percent_identity=100.0,
+            alignment_length=100,
+            query_length=100,
+            subject_length=100,
+            query_start=1,
+            query_end=100,
+            subject_start=1,
+            subject_end=100,
+            evalue=0.0,
+            bit_score=100,
+            query_coverage=100.0,
+            subject_taxid="12345",
+            subject_taxids="12345"
+        )
+        assert hit.get_accession() == "12345"
