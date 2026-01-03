@@ -105,6 +105,12 @@ Notes:
         default=1,
         help='Number of threads for BLAST search (default: 1)'
     )
+
+    parser.add_argument(
+        '--overwrite_existing_blast',
+        action='store_true',.
+        help='If the blast results already exist, redo the search and overwrite them'
+    )
     
     parser.add_argument(
         '--dry-run',
@@ -122,6 +128,8 @@ Notes:
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
+    skip_existing = ! args.overwrite
+
     logger.info("=" * 60)
     logger.info("ePLACE BLAST Workflow")
     logger.info("=" * 60)
@@ -130,6 +138,7 @@ Notes:
     logger.info(f"Taxonomic rank: {args.rank}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
+    logger.info(f"Overwrite: {args.overwrite} (skip_existing: {skip_existing})")
     logger.info(f"Database: {args.database}")
     logger.info(f"Threads: {args.num_threads}")
     
@@ -163,7 +172,8 @@ Notes:
             min_coverage=args.min_coverage,
             database=args.database,
             blastdb_path=args.blastdb_path,
-            num_threads=args.num_threads
+            num_threads=args.num_threads,
+            skip_existing=skip_existing
         )
         
         if not success:

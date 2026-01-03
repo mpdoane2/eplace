@@ -368,7 +368,7 @@ def run_blast_search(
     database: str = "core_nt",
     blastdb_path: Optional[Path] = None,
     num_threads: int = 1,
-    overwrite: bool = False
+    skip_existing: bool = True
 ) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run BLAST search and return filtered hits.
@@ -386,8 +386,8 @@ def run_blast_search(
         Tuple of (success: bool, filtered_hits: list[BlastHit])
     """
 
-    if os.path.exists(output_file) and not overwrite:
-        logger.info(f"The blast output file {output_file} already exists. Not overwriting")
+    if os.path.exists(output_file) and skip_existing:
+        logger.info(f"The blast output file {output_file} already exists. Skipping and using these results")
         return True
 
     runner = BlastRunner(blastdb_path)
