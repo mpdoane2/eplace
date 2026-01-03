@@ -591,7 +591,7 @@ class TestProcessBlastResultsForTaxonomy:
             # Track what representatives were extracted for each query
             extracted_representatives = {}
             
-            def track_extraction(query_id, representative_hits, output_dir, database='core_nt'):
+            def track_extraction(query_id: str, representative_hits: list, output_dir: Path, database: str = 'core_nt') -> Path:
                 # Store the subject IDs that were extracted
                 extracted_representatives[query_id] = [hit.subject_id for hit in representative_hits]
                 return tmppath / f"{query_id}_output.fasta"
