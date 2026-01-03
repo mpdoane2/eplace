@@ -2,7 +2,7 @@
 #SBATCH --job-name=blastn
 #SBATCH --time=5-0
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
 #SBATCH --partition=high-capacity
 #SBATCH --qos=hc-concurrent-jobs
