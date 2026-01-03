@@ -33,7 +33,7 @@ class TaxonomyExtractor:
             raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
         self.rank = rank
     
-    def parse_taxids(self, tax_ids: list[int]) -> (dict[int, tuple[str, str]], dict[int, tuple[str, str]]):
+    def parse_taxids(self, tax_ids: list[int]) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
 
