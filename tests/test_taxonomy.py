@@ -391,6 +391,16 @@ class TestProcessBlastResultsForTaxonomy:
 class TestRewriteBlastHits:
     """Test cases for rewrite_blast_hits function."""
     
+    # Expected field names for blast hit output
+    EXPECTED_FIELDS = [
+        "query_id", "subject_id", "percent_identity", "alignment_length",
+        "query_length", "subject_length", "query_start", "query_end",
+        "subject_start", "subject_end", "evalue", "bit_score",
+        "query_coverage", "subject_taxid", "subject_taxids",
+        "subject_rank_tid", "subject_rank_name",
+        "subject_phylum_tid", "subject_phylum_name"
+    ]
+    
     def test_rewrite_blast_hits_with_complete_annotations(self):
         """Test writing blast hits with all fields populated."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -434,14 +444,7 @@ class TestRewriteBlastHits:
             
             # Check header
             header = lines[0].strip().split('\t')
-            assert header == [
-                "query_id", "subject_id", "percent_identity", "alignment_length",
-                "query_length", "subject_length", "query_start", "query_end",
-                "subject_start", "subject_end", "evalue", "bit_score",
-                "query_coverage", "subject_taxid", "subject_taxids",
-                "subject_rank_tid", "subject_rank_name",
-                "subject_phylum_tid", "subject_phylum_name"
-            ]
+            assert header == self.EXPECTED_FIELDS
             
             # Check data line
             data = lines[1].strip().split('\t')
@@ -571,16 +574,8 @@ class TestRewriteBlastHits:
             assert len(lines) == 1
             
             # Check header exists with all expected fields
-            expected_fields = [
-                "query_id", "subject_id", "percent_identity", "alignment_length",
-                "query_length", "subject_length", "query_start", "query_end",
-                "subject_start", "subject_end", "evalue", "bit_score",
-                "query_coverage", "subject_taxid", "subject_taxids",
-                "subject_rank_tid", "subject_rank_name",
-                "subject_phylum_tid", "subject_phylum_name"
-            ]
             header = lines[0].strip().split('\t')
-            assert header == expected_fields
+            assert header == self.EXPECTED_FIELDS
     
     def test_rewrite_blast_hits_multiple_records(self):
         """Test writing multiple blast hits."""
