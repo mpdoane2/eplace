@@ -36,7 +36,7 @@ class TaxonomyExtractor:
     def parse_taxids(self, tax_ids: list[int]) -> dict[int, str]:
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
-        and return a dict of the taxids and their genus
+        and return a dict of the taxids and their name based on the rank
 
         Args:
             tax_ids: the taxonomy IDs reported by BLAST
@@ -58,7 +58,7 @@ class TaxonomyExtractor:
         df['ranks'] = df['FullLineageRanks'].str.split(';')
         long_df = df.explode(['names', 'taxids', 'ranks'])
         # this creates a dict of the query taxid to a tuple of the rank's taxid and genus_name
-        genus_dict = {
+        rank_dict = {
                 str(tid): (str(taxid), str(name))
                 for tid, taxid, name in (
                             long_df.loc[long_df['ranks'] == self.rank, ['TaxID', 'taxids', 'names']]
@@ -68,7 +68,7 @@ class TaxonomyExtractor:
         }
 
 
-        return genus_dict
+        return rank_dict
     
     def group_hits_by_query(
         self,
