@@ -33,7 +33,7 @@ class TaxonomyExtractor:
             raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
         self.rank = rank
     
-    def parse_taxids(self, tax_ids: list[int]) -> dict[int, tuple[str, str]]:
+    def parse_taxids(self, tax_ids: list[int]) -> (dict[int, tuple[str, str]], dict[int, tuple[str, str]]):
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
 
@@ -41,7 +41,8 @@ class TaxonomyExtractor:
             tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
-            the taxonomy information for that rank as dict mapping taxid to (rank_taxid, rank_name)
+            the taxonomy information for that rank as dict mapping taxid to (rank_taxid, rank_name) and
+            the phylum information for the subject with a dict mapping the taxid to (phylum_taxid, phylum_name)
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
@@ -65,8 +66,16 @@ class TaxonomyExtractor:
                         )
         }
 
+        phylum_dict = {
+                str(tid): (str(taxid), str(name))
+                for tid, taxid, name in (
+                            long_df.loc[long_df['ranks'] == 'phylum', ['TaxID', 'taxids', 'names']]
+                            .drop_duplicates()
+                            .itertuples(index=False, name=None)
+                        )
+        }
 
-        return rank_dict
+        return rank_dict, phylum_dict
     
     def group_hits_by_query(
         self,
@@ -287,6 +296,48 @@ class SequenceExtractor:
             return None
 
 
+def rewrite_blast_hits(
+    blast_hits: List[BlastHit],
+    output_file: Path,
+    header: bool = True) -> bool:
+    """
+    Rewrite the blast hits when we have annotated them
+
+    Args:
+        blast_hits: list of BlastHit objects
+        output_file: the file to write to
+        header: whether to include a header line in the file
+    
+    Returns:
+        True on success
+    """
+
+    fields = [
+        "query_id", "subject_id", "percent_identity", "alignment_length",
+        "query_length", "subject_length", "query_start", "query_end",
+        "subject_start", "subject_end", "evalue", "bit_score",
+        "query_coverage", "subject_taxid", "subject_taxids",
+        "subject_rank_tid", "subject_rank_name",
+        "subject_phylum_tid", "subject_phylum_name",
+    ]
+
+
+    with open(output_file, 'w') as out:
+        if header:
+            print("\t".join(fields), file=out)
+
+        for hit in blast_hits:
+            print(
+                "\t".join(
+                    "" if getattr(hit, f) is None else str(getattr(hit, f))
+                    for f in fields
+                ),
+                file=out
+            )
+    
+    return True
+
+
 def process_blast_results_for_taxonomy(
     blast_hits: List[BlastHit],
     output_dir: Path,
@@ -317,7 +368,7 @@ def process_blast_results_for_taxonomy(
     
     # get all the taxonomies
     subject_taxids = {hit.subject_taxid for hit in blast_hits}
-    taxonomies = tax_extractor.parse_taxids(list(subject_taxids))
+    taxonomies, phyla = tax_extractor.parse_taxids(list(subject_taxids))
 
     # add all the ranks to all the hits
     for h in blast_hits:
@@ -328,6 +379,14 @@ def process_blast_results_for_taxonomy(
         else:
             h.subject_rank_tid = None
             h.subject_rank_name = None
+        phylum_info = phyla.get(h.subject_taxid)
+        if isinstance(phylum_info, (list, tuple)) and len(phylum_info) >= 2:
+            h.subject_phylum_tid = phylum_info[0]
+            h.subject_phylum_name = phylum_info[1]
+        else:
+            h.subject_phylum_tid = None
+            h.subject_phylum_name = None
+
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
     

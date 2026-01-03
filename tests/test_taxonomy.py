@@ -78,12 +78,16 @@ class TestTaxonomyExtractor:
         ]
 
     def test_parse_taxids(self):
-        tax_info = self.taxonomy_extractor.parse_taxids([9606, 590])
+        tax_info, phyla_info = self.taxonomy_extractor.parse_taxids([9606, 590])
 
         homo_tuple = ('9605', 'Homo')
         salm_tuple = ('590', 'Salmonella')
+        homo_phylum = ('7711', 'Chordata')
+        salm_phylum = ('1224', 'Pseudomonadota')
         assert tax_info["9606"] == homo_tuple
         assert tax_info["590"] == salm_tuple
+        assert phyla_info['9606'] == homo_phylum
+        assert phyla_info['590'] == salm_phylum
     
     def test_group_hits_by_query(self):
         """Test grouping BLAST hits by query."""

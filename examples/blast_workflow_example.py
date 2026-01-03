@@ -218,7 +218,18 @@ Notes:
     except Exception as e:
         logger.error(f"Error extracting sequences: {e}")
         sys.exit(1)
-    
+
+    logger.info("Rewriting the blast output file with the new annotations")
+    try:
+        result = rewrite_blast_hits(
+            blast_hits=filtered_hits,
+            output_file=args.output_dir / "blast_results_annotated.txt",
+            header=True
+        )
+    except Exception as e:
+        logger.error(f"Error rewriting the blast hits: {e}")
+        sys.exit(1)
+
     logger.info("\n" + "=" * 60)
     logger.info("Workflow completed successfully!")
     logger.info("=" * 60)

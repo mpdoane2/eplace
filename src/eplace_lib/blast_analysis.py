@@ -39,6 +39,8 @@ class BlastHit:
         subject_taxids: blast should give a ; separated list of the hierarchy
         subject_rank_tid: the subjects taxonomy ID at our rank
         subject_rank_name: the subjects taxonomy name at our rank
+        subject_phylum_tid: the taxonomy ID of the subject's phylum that we will later use for grouping
+        subject_phylum_name: the name of the subject's phylum that we will later use for grouping
     """
     query_id: str
     subject_id: str
@@ -57,6 +59,8 @@ class BlastHit:
     subject_taxids: str
     subject_rank_tid: Optional[str] = None
     subject_rank_name: Optional[str] = None
+    subject_phylum_tid: Optional[str] = None
+    subject_phylum_name: Optional[str] = None
 
 class FastaReader:
     """
