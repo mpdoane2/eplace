@@ -356,8 +356,14 @@ class IQTreeBuilder:
             for hit in blast_hits:
                 label = getattr(hit, label_field, None)
                 if label:
-                    # Clean up the label for tree format
-                    clean_label = label.replace(' ', '_').replace(':', '_')
+                    # Clean up the label for tree format (Newick format constraints)
+                    # Replace spaces, colons, parentheses, commas, and semicolons
+                    clean_label = (label.replace(' ', '_')
+                                  .replace(':', '_')
+                                  .replace('(', '_')
+                                  .replace(')', '_')
+                                  .replace(',', '_')
+                                  .replace(';', '_'))
                     label_map[hit.subject_id] = clean_label
                     # Also handle potential header prefixes from trimmed files
                     if hit.subject_rank_name:
