@@ -161,6 +161,8 @@ class MAFFTAligner:
                 text=True,
                 timeout=5
             )
+            if result.returncode == 0:
+                logging.info(f"Using mafft to build the alignment ({result.stdout})")
             return result.returncode == 0
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
@@ -245,8 +247,8 @@ class IQTreeBuilder:
         Returns:
             Tuple of (available: bool, command: str or None)
         """
-        # Try both 'iqtree' and 'iqtree2' commands
-        for cmd in ['iqtree2', 'iqtree']:
+        # Try 'iqtree', 'iqtree2', and 'iqtree3' commands
+        for cmd in ['iqtree3', 'iqtree2', 'iqtree']:
             try:
                 result = subprocess.run(
                     [cmd, '--version'],
@@ -255,6 +257,7 @@ class IQTreeBuilder:
                     timeout=5
                 )
                 if result.returncode == 0:
+                    logging.info(f"Using {cmd} to build the trees ({result.stdout})")
                     return True, cmd
             except (subprocess.SubprocessError, FileNotFoundError):
                 continue
