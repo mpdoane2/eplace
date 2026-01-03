@@ -98,6 +98,64 @@ GCTAGCTAGCTA
 class TestBlastRunner:
     """Test cases for BlastRunner class."""
     
+    def setup_method(self):
+        self.hits = [
+            BlastHit(
+                query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
+                percent_identity=100.000, 
+                alignment_length=540,
+                query_length=540,
+                subject_length=1432,
+                query_start=1, 
+                query_end=540,
+                subject_start=1,
+                subject_end=540,
+                evalue=0.0,
+                bit_score=998,
+                query_coverage=100,
+                subject_taxid="149539",
+                subject_taxids="149539",
+                subject_rank_tid="590",
+                subject_rank_name="Salmonella"
+            ),
+            BlastHit(
+                query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
+                percent_identity=100.000, 
+                alignment_length=420,
+                query_length=420,
+                subject_length=784,
+                query_start=1, 
+                query_end=420,
+                subject_start=1,
+                subject_end=420,
+                evalue=0.0,
+                bit_score=776,
+                query_coverage=100,
+                subject_taxid="9606",
+                subject_taxids="9606",
+                subject_rank_tid="9605",
+                subject_rank_name="Homo"
+            ),
+            BlastHit(
+                query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
+                percent_identity=91.304, 
+                alignment_length=115,
+                query_length=420,
+                subject_length=1626,
+                query_start=218, 
+                query_end=331,
+                subject_start=173,
+                subject_end=286,
+                evalue=3.56e-33,
+                bit_score=156,
+                query_coverage=27.3809523809524,
+                subject_taxid="9597",
+                subject_taxids="9597",
+                subject_rank_tid="9596",
+                subject_rank_name="Pan"
+            )
+        ]
+
     def test_init_default(self):
         """Test BlastRunner initialization with defaults."""
         with patch.dict('os.environ', {}, clear=True):
@@ -140,10 +198,11 @@ class TestBlastRunner:
             blast_output = tmppath / "blast_results.txt"
             
             # Create mock BLAST output
-            blast_content = """seq1\tgi|123|ref|NC_001\t95.5\t200\t500\t1000\t1\t200\t100\t299\t1e-50\t250.0
-seq1\tgi|456|ref|NC_002\t92.0\t180\t500\t900\t1\t180\t50\t229\t1e-45\t240.0
-seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0
+            blast_content = """seq1\tgi|123|ref|NC_001\t95.5\t200\t500\t1000\t1\t200\t100\t299\t1e-50\t250.0\t9606\t7711;40674;9443;9604;9605;9606
+seq1\tgi|456|ref|NC_002\t92.0\t180\t500\t900\t1\t180\t50\t229\t1e-45\t240.0\t590\t1224;1236;91347;543;590
+seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0\t590\t1224;1236;91347;543;590
 """
+
             blast_output.write_text(blast_content)
             
             runner = BlastRunner()
@@ -158,6 +217,8 @@ seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0
             assert hits[0].evalue == 1e-50
             assert hits[0].bit_score == 250.0
             assert hits[0].query_coverage == pytest.approx(40.0, abs=0.1)
+            assert hits[0].subject_taxid == "9606"
+            assert hits[0].subject_taxids == "7711;40674;9443;9604;9605;9606"
     
     def test_parse_blast_results_invalid_format(self):
         """Test parsing BLAST output with invalid format."""
@@ -175,35 +236,7 @@ seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0
     
     def test_filter_blast_hits(self):
         """Test filtering BLAST hits."""
-        hits = [
-            BlastHit(
-                query_id='seq1', subject_id='subj1',
-                percent_identity=95.0, alignment_length=200,
-                query_length=500, subject_length=1000,
-                query_start=1, query_end=450,  # 90% coverage
-                subject_start=100, subject_end=549,
-                evalue=1e-50, bit_score=250.0,
-                query_coverage=90.0
-            ),
-            BlastHit(
-                query_id='seq1', subject_id='subj2',
-                percent_identity=85.0, alignment_length=150,  # Below identity threshold
-                query_length=500, subject_length=900,
-                query_start=1, query_end=400,
-                subject_start=50, subject_end=449,
-                evalue=1e-40, bit_score=230.0,
-                query_coverage=80.0
-            ),
-            BlastHit(
-                query_id='seq1', subject_id='subj3',
-                percent_identity=92.0, alignment_length=100,
-                query_length=500, subject_length=800,
-                query_start=1, query_end=100,  # Only 20% coverage
-                subject_start=200, subject_end=299,
-                evalue=1e-30, bit_score=220.0,
-                query_coverage=20.0
-            ),
-        ]
+        hits = self.hits
         
         runner = BlastRunner()
         filtered = runner.filter_blast_hits(
@@ -212,8 +245,8 @@ seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0
             min_coverage=80.0
         )
         
-        assert len(filtered) == 1
-        assert filtered[0].subject_id == 'subj1'
+        assert len(filtered) == 2
+        assert filtered[0].subject_id == 'gi|156763568|gb|EU014687.1|'
     
     @patch('eplace_lib.blast_analysis.BlastRunner.check_blastn_available')
     @patch('subprocess.run')
@@ -267,6 +300,7 @@ seq2\tgi|789|ref|NC_003\t88.5\t150\t400\t800\t1\t150\t200\t349\t1e-40\t230.0
 class TestRunBlastSearch:
     """Test cases for run_blast_search convenience function."""
     
+
     @patch('eplace_lib.blast_analysis.BlastRunner.run_blastn')
     @patch('eplace_lib.blast_analysis.BlastRunner.parse_blast_results')
     @patch('eplace_lib.blast_analysis.BlastRunner.filter_blast_hits')

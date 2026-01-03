@@ -21,9 +21,9 @@ def example_basic_usage():
     
     # Simple one-line setup
     # Note: This will actually download large files in a real scenario
-    # success, message = setup_ncbi_database()
-    # print(f"Success: {success}")
-    # print(f"Message: {message}")
+    success, message = setup_ncbi_database()
+    print(f"Success: {success}")
+    print(f"Message: {message}")
     
     print("To download the database, call:")
     print("  success, message = setup_ncbi_database()")

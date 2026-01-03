@@ -8,8 +8,8 @@ based on sequence identity and coverage criteria.
 import os
 import subprocess
 import logging
+from typing import Optional
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 # Configure module logger
@@ -35,6 +35,10 @@ class BlastHit:
         evalue: Expectation value
         bit_score: Bit score
         query_coverage: Percentage of query covered by alignment
+        subject_taxid: the subject's taxonomy id
+        subject_taxids: blast should give a ; separated list of the hierarchy
+        subject_rank_tid: the subjects taxonomy ID at our rank
+        subject_rank_name: the subjects taxonomy name at our rank
     """
     query_id: str
     subject_id: str
@@ -49,9 +53,10 @@ class BlastHit:
     evalue: float
     bit_score: float
     query_coverage: float
-    subject_taxid: int
+    subject_taxid: str
     subject_taxids: str
-
+    subject_rank_tid: Optional[str] = None
+    subject_rank_name: Optional[str] = None
 
 class FastaReader:
     """
@@ -59,7 +64,7 @@ class FastaReader:
     """
     
     @staticmethod
-    def read_fasta(fasta_path: Path) -> Dict[str, str]:
+    def read_fasta(fasta_path: Path) -> dict[str, str]:
         """
         Read sequences from a FASTA file.
         
@@ -67,7 +72,7 @@ class FastaReader:
             fasta_path: Path to the FASTA file
             
         Returns:
-            Dictionary mapping sequence IDs to sequences
+            dictionary mapping sequence IDs to sequences
             
         Raises:
             FileNotFoundError: If FASTA file doesn't exist
@@ -108,7 +113,7 @@ class FastaReader:
         return sequences
     
     @staticmethod
-    def get_sequence_lengths(fasta_path: Path) -> Dict[str, int]:
+    def get_sequence_lengths(fasta_path: Path) -> dict[str, int]:
         """
         Get the length of each sequence in a FASTA file.
         
@@ -116,7 +121,7 @@ class FastaReader:
             fasta_path: Path to the FASTA file
             
         Returns:
-            Dictionary mapping sequence IDs to their lengths
+            dictionary mapping sequence IDs to their lengths
         """
         sequences = FastaReader.read_fasta(fasta_path)
         return {seq_id: len(seq) for seq_id, seq in sequences.items()}
@@ -237,17 +242,17 @@ class BlastRunner:
     def parse_blast_results(
         self,
         blast_output: Path,
-        query_lengths: Optional[Dict[str, int]] = None
-    ) -> List[BlastHit]:
+        query_lengths: Optional[dict[str, int]] = None
+    ) -> list[BlastHit]:
         """
         Parse BLAST tabular output.
         
         Args:
             blast_output: Path to BLAST output file (tabular format)
-            query_lengths: Dictionary of query sequence lengths. If None, uses qlen from results.
+            query_lengths: dictionary of query sequence lengths. If None, uses qlen from results.
             
         Returns:
-            List of BlastHit objects
+            list of BlastHit objects
             
         Raises:
             FileNotFoundError: If BLAST output file doesn't exist
@@ -284,7 +289,7 @@ class BlastRunner:
                     subject_end = int(fields[9])
                     evalue = float(fields[10])
                     bit_score = float(fields[11])
-                    staxid = int(fields[12])
+                    staxid = fields[12]
                     staxids = fields[13]
                     
                     # Calculate query coverage
@@ -304,8 +309,8 @@ class BlastRunner:
                         evalue=evalue,
                         bit_score=bit_score,
                         query_coverage=query_coverage,
-                        staxid=staxid,
-                        staxids=staxids
+                        subject_taxid=staxid,
+                        subject_taxids=staxids
                     )
                     hits.append(hit)
                     
@@ -318,16 +323,16 @@ class BlastRunner:
     
     def filter_blast_hits(
         self,
-        hits: List[BlastHit],
+        hits: list[BlastHit],
         min_identity: float = 90.0,
         min_coverage: float = 80.0,
         min_alignment_length: Optional[int] = None
-    ) -> List[BlastHit]:
+    ) -> list[BlastHit]:
         """
         Filter BLAST hits based on identity and coverage thresholds.
         
         Args:
-            hits: List of BlastHit objects
+            hits: list of BlastHit objects
             min_identity: Minimum percent identity (default: 90.0)
             min_coverage: Minimum query coverage percentage (default: 80.0)
             min_alignment_length: Minimum alignment length (optional)
@@ -362,8 +367,9 @@ def run_blast_search(
     min_coverage: float = 80.0,
     database: str = "core_nt",
     blastdb_path: Optional[Path] = None,
-    num_threads: int = 1
-) -> Tuple[bool, List[BlastHit]]:
+    num_threads: int = 1,
+    overwrite: bool = False
+) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run BLAST search and return filtered hits.
     
@@ -377,8 +383,13 @@ def run_blast_search(
         num_threads: Number of threads to use
         
     Returns:
-        Tuple of (success: bool, filtered_hits: List[BlastHit])
+        Tuple of (success: bool, filtered_hits: list[BlastHit])
     """
+
+    if os.path.exists(output_file) and not overwrite:
+        logger.info(f"The blast output file {output_file} already exists. Not overwriting")
+        return True
+
     runner = BlastRunner(blastdb_path)
     
     # Run BLAST

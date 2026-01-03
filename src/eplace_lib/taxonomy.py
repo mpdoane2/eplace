@@ -9,41 +9,16 @@ import os
 import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional, List, Dict, Set
 from collections import defaultdict
 from dataclasses import dataclass
 
 from .blast_analysis import BlastHit
 
+import pytaxonkit
+
 # Configure module logger
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TaxonomicInfo:
-    """
-    Represents taxonomic information for a sequence.
-    
-    Attributes:
-        sequence_id: Sequence identifier
-        taxid: NCBI taxonomy ID
-        kingdom: Kingdom name
-        phylum: Phylum name
-        class_name: Class name
-        order: Order name
-        family: Family name
-        genus: Genus name
-        species: Species name
-    """
-    sequence_id: str
-    taxid: Optional[str] = None
-    kingdom: Optional[str] = None
-    phylum: Optional[str] = None
-    class_name: Optional[str] = None
-    order: Optional[str] = None
-    family: Optional[str] = None
-    genus: Optional[str] = None
-    species: Optional[str] = None
 
 
 class TaxonomyExtractor:
@@ -51,75 +26,63 @@ class TaxonomyExtractor:
     Class for extracting taxonomic information from sequence IDs.
     """
     
-    VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     
-    def __init__(self):
+    def __init__(self, rank: str = "genus"):
         """Initialize the TaxonomyExtractor."""
-        pass
+        VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+        if rank not in VALID_RANKS:
+            raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
+        self.rank = rank
     
-    @staticmethod
-    def parse_sequence_id(sequence_id: str) -> TaxonomicInfo:
+    def parse_taxids(self, tax_ids: list(int)) -> dict(int, str):
         """
-        Parse taxonomic information from a sequence ID.
-        
-        For NCBI sequences, the ID may contain taxonomic information.
-        This is a simplified parser that extracts basic information.
-        
+        Parse taxonomic information from the taxonomy ID from the BLAST hits
+        and return a dict of the taxids and their genus
+
         Args:
-            sequence_id: Sequence identifier
+            tax_id: the taxonomy ID reported by BLAST
             
         Returns:
-            TaxonomicInfo object
+            the taxonomy infomation for that rank.
         """
-        # For now, create a basic TaxonomicInfo object
-        # In a real implementation, this would query NCBI taxonomy database
-        # or parse information from the sequence header
-        
-        tax_info = TaxonomicInfo(sequence_id=sequence_id)
-        
-        # Extract taxonomy ID if present (format: gi|123456|...)
-        parts = sequence_id.split('|')
-        for i, part in enumerate(parts):
-            if part == 'gi' and i + 1 < len(parts):
-                tax_info.taxid = parts[i + 1]
-                break
-        
-        return tax_info
-    
-    def extract_taxonomy_from_hits(
-        self,
-        hits: List[BlastHit]
-    ) -> Dict[str, TaxonomicInfo]:
-        """
-        Extract taxonomic information from BLAST hits.
-        
-        Args:
-            hits: List of BlastHit objects
-            
-        Returns:
-            Dictionary mapping subject IDs to TaxonomicInfo objects
-        """
-        taxonomy_info = {}
-        
-        for hit in hits:
-            if hit.subject_id not in taxonomy_info:
-                tax_info = self.parse_sequence_id(hit.subject_id)
-                taxonomy_info[hit.subject_id] = tax_info
-        
-        return taxonomy_info
+        # make sure that duplicate taxids are removed before we look them up
+        tax_ids = list(set(tax_ids))
+
+        # we need to get the whole lineage, and then convert it to a dict
+        try:
+            df = pytaxonkit.lineage(tax_ids)
+        except Exception as e:
+            logger.error(f"Error retrieving taxonomic lineages: {e}")
+            return {}
+        df['names'] = df['FullLineage'].str.split(';')
+        df['taxids'] = df['FullLineageTaxIDs'].str.split(';')
+        df['ranks'] = df['FullLineageRanks'].str.split(';')
+        long_df = df.explode(['names', 'taxids', 'ranks'])
+        # this creates a dict of the query taxid to a tuple of the rank's taxid and genus_name
+        genus_dict = {
+                str(tid): (str(taxid), str(name))
+                for tid, taxid, name in (
+                            long_df.loc[long_df['ranks'] == self.rank, ['TaxID', 'taxids', 'names']]
+                            .drop_duplicates()
+                            .itertuples(index=False, name=None)
+                        )
+        }
+
+
+        return genus_dict
     
     def group_hits_by_query(
         self,
-        hits: List[BlastHit]
-    ) -> Dict[str, List[BlastHit]]:
+        hits: list[BlastHit]
+    ) -> dict[str, list[BlastHit]]:
         """
         Group BLAST hits by query sequence.
         
         Args:
-            hits: List of BlastHit objects
+            hits: list of BlastHit objects
             
         Returns:
-            Dictionary mapping query IDs to lists of hits
+            dictionary mapping query IDs to lists of hits
         """
         grouped = defaultdict(list)
         for hit in hits:
@@ -128,44 +91,32 @@ class TaxonomyExtractor:
     
     def select_representatives_by_rank(
         self,
-        hits: List[BlastHit],
-        rank: str,
+        hits: list[BlastHit],
         max_per_rank: int = 1
-    ) -> List[BlastHit]:
+    ) -> list[BlastHit]:
         """
         Select representative sequences per taxonomic rank.
         
         Args:
-            hits: List of BlastHit objects for a single query
-            rank: Taxonomic rank ('phylum', 'class', 'order', 'family', 'genus', 'species')
+            hits: list of BlastHit objects for a single query
             max_per_rank: Maximum number of representatives per rank (default: 1)
             
         Returns:
-            List of representative BlastHit objects
+            list of representative BlastHit objects
             
         Raises:
             ValueError: If rank is not valid
         """
-        if rank not in self.VALID_RANKS:
-            raise ValueError(
-                f"Invalid rank '{rank}'. Must be one of: {', '.join(self.VALID_RANKS)}"
-            )
-        
-        # For now, since we don't have full taxonomy information,
-        # we'll use a simplified approach based on sequence ID patterns
-        # In a real implementation, this would use NCBI taxonomy database
         
         # Group hits by taxonomic rank (using subject_id as proxy)
         rank_groups = defaultdict(list)
         
         for hit in hits:
-            # Extract taxonomic information
-            tax_info = self.parse_sequence_id(hit.subject_id)
-            
-            # Use subject_id prefix as a proxy for taxonomic grouping
-            # In a real implementation, this would use actual taxonomy
-            rank_key = self._get_rank_key(hit.subject_id, rank)
-            rank_groups[rank_key].append(hit)
+            if hit.subject_rank_tid:
+                logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
+                rank_groups[hit.subject_rank_tid].append(hit)
+            else:
+                logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
         
         # Select best representative from each rank
         representatives = []
@@ -177,35 +128,11 @@ class TaxonomyExtractor:
             representatives.extend(rank_hits[:max_per_rank])
         
         logger.info(
-            f"Selected {len(representatives)} representative sequences "
-            f"from {len(hits)} hits at rank '{rank}'"
+            f"Selected {len(representatives)} representative sequences from {len(hits)} hits at rank '{self.rank}'"
         )
         
         return representatives
     
-    @staticmethod
-    def _get_rank_key(sequence_id: str, rank: str) -> str:
-        """
-        Get a rank key for grouping sequences.
-        
-        This is a simplified implementation that uses sequence ID patterns.
-        In a real implementation, this would query NCBI taxonomy database.
-        
-        Args:
-            sequence_id: Sequence identifier
-            rank: Taxonomic rank
-            
-        Returns:
-            Rank key for grouping
-        """
-        # Simple heuristic: use the first part of the ID
-        # In reality, we'd need to query NCBI taxonomy database
-        parts = sequence_id.split('|')
-        if len(parts) > 1:
-            return f"{rank}_{parts[0]}_{parts[1][:8]}"
-        else:
-            return f"{rank}_{sequence_id[:16]}"
-
 
 class SequenceExtractor:
     """
@@ -247,7 +174,7 @@ class SequenceExtractor:
     
     def extract_sequences(
         self,
-        sequence_ids: List[str],
+        sequence_ids: list[str],
         output_fasta: Path,
         database: str = "core_nt"
     ) -> bool:
@@ -255,7 +182,7 @@ class SequenceExtractor:
         Extract sequences from BLAST database using blastdbcmd.
         
         Args:
-            sequence_ids: List of sequence IDs to extract
+            sequence_ids: list of sequence IDs to extract
             output_fasta: Path to output FASTA file
             database: Name of BLAST database (default: "core_nt")
             
@@ -321,7 +248,7 @@ class SequenceExtractor:
     def extract_representatives_for_query(
         self,
         query_id: str,
-        representative_hits: List[BlastHit],
+        representative_hits: list[BlastHit],
         output_dir: Path,
         database: str = "core_nt"
     ) -> Optional[Path]:
@@ -330,7 +257,7 @@ class SequenceExtractor:
         
         Args:
             query_id: Query sequence identifier
-            representative_hits: List of representative BlastHit objects
+            representative_hits: list of representative BlastHit objects
             output_dir: Output directory for FASTA files
             database: Name of BLAST database
             
@@ -375,17 +302,26 @@ def process_blast_results_for_taxonomy(
     Process BLAST hits to extract representative sequences per taxonomic rank.
     
     Args:
-        blast_hits: List of BlastHit objects
+        blast_hits: list of BlastHit objects
         output_dir: Output directory for FASTA files
         rank: Taxonomic rank for representative selection
         database: Name of BLAST database
         blastdb_path: Path to BLAST database directory
         
     Returns:
-        Dictionary mapping query IDs to output FASTA file paths
+        dictionary mapping query IDs to output FASTA file paths
     """
-    tax_extractor = TaxonomyExtractor()
+    tax_extractor = TaxonomyExtractor(rank)
     seq_extractor = SequenceExtractor(blastdb_path)
+    
+    # get all the taxonomies
+    subject_taxids = {hit.subject_taxid for hit in blast_hits}
+    taxonomies = tax_extractor.parse_taxids(list(subject_taxids))
+
+    # add all the ranks to all the hits
+    for h in blast_hits:
+        h.subject_rank_tid = taxonomies.get(h.subject_taxid)[0] if h.subject_taxid in taxonomies else None
+        h.subject_rank_name = taxonomies.get(h.subject_taxid)[1] if h.subject_taxid in taxonomies else None
     
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
@@ -399,8 +335,10 @@ def process_blast_results_for_taxonomy(
         # Select representatives
         representatives = tax_extractor.select_representatives_by_rank(
             hits=query_hits,
-            rank=rank
         )
+        if len(representatives) == 0:
+            logger.warn(f"Error: No representative sequences for {query_id} at rank {rank}")
+            continue
         
         # Create query-specific output directory
         query_output_dir = output_dir / query_id.replace('|', '_').replace('/', '_')

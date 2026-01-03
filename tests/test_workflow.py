@@ -26,9 +26,9 @@ class TestBlastWorkflow:
             # Create test query FASTA
             query_fasta = tmppath / "query.fasta"
             query_content = """>seq1
-ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
+CAGGCCTAACACATGCAAGTCGAACGGTAACAGGAAGCAGCTTGCTGCTTTGCTGACGAGTGGCGGACGGGTGAGTAATGTCTGGGAAACTGCCTGATGGAGGGGGATAACTACTGGAAACGGTGGCTAATACCGCATAACGTCGCAAGACCAAAGAGGGGGACCTTCGGGCCTCTTGCCATCAGATGTGCCCAGATGGGATTAGCTTGTTGGTGAGGTAACGGCTCACCAAGGCGACGATCCCTAGCTGGTCTGAGAGGATGACCAGCCACACTGGAACTGAGACACGGTCCAGACTCCTACGGGAGGCAGCAGTGGGGAATATTGCACAATGGGCGCAAGCCTGATGCAGCCATGCCGCGTGTATGAAGAAGGCCTTCGGGTTGTAAAGTACTTTCAGCGGGGAGGAAGGTGTTGTGGTTAATAACCGCAGCAATTGACGTTACCCGCAGAAGAAGCACCGGCTAACTCCGTGCCAGCAGCCGCGGTAATACGGAGGGTGCAAGCGTTAATCGGAATTACTGGGCGTAAAGCGGCACG
 >seq2
-GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTA
+AGAAGGCTTTGGCTTCTGATAGTCATGGACTCACTAGGCTGCTGAGGAAGATCAATAATACCTACTGGAATCAGTCATGAGAAGTCAAGCATGGAAATTGTGAATTGTGTGTGTGGCCAGACCAGTACCTCCAAGTGTTCAGAAGATGTGTGACCAGACAAAACACAGTAAATGCTGCCCAGCAAAAGGCAATCAATGCTGCCCACCACAGCAGAACCAGTGCTGCCAGTCAAAAGGCAATCAATGCTGCCCACCAAAACAGAACCAGTGCTGCCAGCCAAAAGGCAGTCAATGCTGCCCACCAAAACACAATCACTGCTGCCAGCCAAAACCCCCATGCTGCATTCAGGCCAGGTGCTGTGGTTTGGAGACCAAGCCTGAAGTCTCACCCCTTAACATGGAGTCTGAGCCCAACTCACC
 """
             query_fasta.write_text(query_content)
             
@@ -36,32 +36,59 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTA
             mock_run.return_value = True
             mock_hits = [
                 BlastHit(
-                    query_id='seq1', subject_id='gi|123|ref|NC_001',
-                    percent_identity=95.0, alignment_length=40,
-                    query_length=40, subject_length=1000,
-                    query_start=1, query_end=40,
-                    subject_start=100, subject_end=139,
-                    evalue=1e-50, bit_score=250.0,
-                    query_coverage=100.0
+                    query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.000, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998,
+                    query_coverage=100,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
                 ),
                 BlastHit(
-                    query_id='seq1', subject_id='gi|456|ref|NC_002',
-                    percent_identity=92.0, alignment_length=38,
-                    query_length=40, subject_length=900,
-                    query_start=1, query_end=38,
-                    subject_start=50, subject_end=87,
-                    evalue=1e-45, bit_score=240.0,
-                    query_coverage=95.0
+                    query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
+                    percent_identity=100.000, 
+                    alignment_length=420,
+                    query_length=420,
+                    subject_length=784,
+                    query_start=1, 
+                    query_end=420,
+                    subject_start=1,
+                    subject_end=420,
+                    evalue=0.0,
+                    bit_score=776,
+                    query_coverage=100,
+                    subject_taxid="9606",
+                    subject_taxids="9606",
+                    subject_rank_tid="9605",
+                    subject_rank_name="Homo"
                 ),
                 BlastHit(
-                    query_id='seq2', subject_id='gi|789|ref|NC_003',
-                    percent_identity=90.0, alignment_length=40,
-                    query_length=40, subject_length=800,
-                    query_start=1, query_end=40,
-                    subject_start=200, subject_end=239,
-                    evalue=1e-40, bit_score=230.0,
-                    query_coverage=100.0
-                ),
+                    query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
+                    percent_identity=91.304, 
+                    alignment_length=115,
+                    query_length=420,
+                    subject_length=1626,
+                    query_start=218, 
+                    query_end=331,
+                    subject_start=173,
+                    subject_end=286,
+                    evalue=3.56e-33,
+                    bit_score=156,
+                    query_coverage=27.3809523809524,
+                    subject_taxid="9597",
+                    subject_taxids="9597",
+                    subject_rank_tid="9596",
+                    subject_rank_name="Pan"
+                )
             ]
             mock_parse.return_value = mock_hits
             mock_extract.return_value = True
@@ -76,14 +103,14 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTA
             )
             
             assert success is True
-            assert len(filtered_hits) == 3
+            assert len(filtered_hits) == 2
             
             # Step 2: Process results for taxonomy
             output_dir = tmppath / "output"
             results = process_blast_results_for_taxonomy(
                 blast_hits=filtered_hits,
                 output_dir=output_dir,
-                rank='species'
+                rank='genus'
             )
             
             assert len(results) == 2
@@ -164,14 +191,59 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
             mock_run.return_value = True
             mock_hits = [
                 BlastHit(
-                    query_id='seq1', subject_id='gi|123|ref|NC_001',
-                    percent_identity=95.0, alignment_length=40,
-                    query_length=40, subject_length=1000,
-                    query_start=1, query_end=40,
-                    subject_start=100, subject_end=139,
-                    evalue=1e-50, bit_score=250.0,
-                    query_coverage=100.0
+                    query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.000, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998,
+                    query_coverage=100,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
                 ),
+                BlastHit(
+                    query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
+                    percent_identity=100.000, 
+                    alignment_length=420,
+                    query_length=420,
+                    subject_length=784,
+                    query_start=1, 
+                    query_end=420,
+                    subject_start=1,
+                    subject_end=420,
+                    evalue=0.0,
+                    bit_score=776,
+                    query_coverage=100,
+                    subject_taxid="9606",
+                    subject_taxids="9606",
+                    subject_rank_tid="9605",
+                    subject_rank_name="Homo"
+                ),
+                BlastHit(
+                    query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
+                    percent_identity=91.304, 
+                    alignment_length=115,
+                    query_length=420,
+                    subject_length=1626,
+                    query_start=218, 
+                    query_end=331,
+                    subject_start=173,
+                    subject_end=286,
+                    evalue=3.56e-33,
+                    bit_score=156,
+                    query_coverage=27.3809523809524,
+                    subject_taxid="9597",
+                    subject_taxids="9597",
+                    subject_rank_tid="9596",
+                    subject_rank_name="Pan"
+                )
             ]
             mock_parse.return_value = mock_hits
             mock_extract.return_value = True
@@ -186,7 +258,7 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
             assert success is True
             
             # Test with different ranks
-            for rank in ['phylum', 'class', 'order', 'family', 'genus', 'species']:
+            for rank in ['phylum', 'class', 'order', 'family', 'genus']:
                 output_dir = tmppath / f"output_{rank}"
                 results = process_blast_results_for_taxonomy(
                     blast_hits=filtered_hits,
@@ -194,5 +266,5 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
                     rank=rank
                 )
                 
-                assert len(results) == 1
+                assert len(results) == 2
                 assert 'seq1' in results

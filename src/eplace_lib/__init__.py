@@ -18,7 +18,6 @@ from .blast_analysis import (
     run_blast_search
 )
 from .taxonomy import (
-    TaxonomicInfo,
     TaxonomyExtractor,
     SequenceExtractor,
     process_blast_results_for_taxonomy
@@ -32,7 +31,6 @@ __all__ = [
     "FastaReader",
     "BlastRunner",
     "run_blast_search",
-    "TaxonomicInfo",
     "TaxonomyExtractor",
     "SequenceExtractor",
     "process_blast_results_for_taxonomy"
