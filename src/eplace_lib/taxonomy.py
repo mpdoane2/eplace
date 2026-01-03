@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Dict
 from collections import defaultdict
-from dataclasses import dataclass
 
 from .blast_analysis import BlastHit
 
