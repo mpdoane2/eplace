@@ -10,7 +10,8 @@ import pytest
 from eplace_lib.taxonomy import (
     TaxonomyExtractor,
     SequenceExtractor,
-    process_blast_results_for_taxonomy
+    process_blast_results_for_taxonomy,
+    rewrite_blast_hits
 )
 from eplace_lib.blast_analysis import BlastHit
 
@@ -413,4 +414,267 @@ class TestProcessBlastResultsForTaxonomy:
             # seq3 has taxid 9597 (Pan) which should also map to Chordata phylum
             assert hits[2].subject_phylum_tid == '7711'
             assert hits[2].subject_phylum_name == 'Chordata'
+
+class TestRewriteBlastHits:
+    """Test cases for rewrite_blast_hits function."""
     
+    # Expected field names for blast hit output
+    EXPECTED_FIELDS = [
+        "query_id", "subject_id", "percent_identity", "alignment_length",
+        "query_length", "subject_length", "query_start", "query_end",
+        "subject_start", "subject_end", "evalue", "bit_score",
+        "query_coverage", "subject_taxid", "subject_taxids",
+        "subject_rank_tid", "subject_rank_name",
+        "subject_phylum_tid", "subject_phylum_name"
+    ]
+    
+    def test_rewrite_blast_hits_with_complete_annotations(self):
+        """Test writing blast hits with all fields populated."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "blast_hits.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1',
+                    subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.0,
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1,
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998.0,
+                    query_coverage=100.0,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella",
+                    subject_phylum_tid="1224",
+                    subject_phylum_name="Pseudomonadota"
+                )
+            ]
+            
+            result = rewrite_blast_hits(hits, output_file, header=True)
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            assert len(lines) == 2  # header + 1 data line
+            
+            # Check header
+            header = lines[0].strip().split('\t')
+            assert header == self.EXPECTED_FIELDS
+            
+            # Check data line
+            data = lines[1].strip().split('\t')
+            assert data[0] == "seq1"
+            assert data[1] == "gi|156763568|gb|EU014687.1|"
+            assert data[15] == "590"
+            assert data[16] == "Salmonella"
+            assert data[17] == "1224"
+            assert data[18] == "Pseudomonadota"
+    
+    def test_rewrite_blast_hits_with_none_values(self):
+        """Test writing blast hits with None values in optional fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "blast_hits.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1',
+                    subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.0,
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1,
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998.0,
+                    query_coverage=100.0,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid=None,
+                    subject_rank_name=None,
+                    subject_phylum_tid=None,
+                    subject_phylum_name=None
+                )
+            ]
+            
+            result = rewrite_blast_hits(hits, output_file, header=True)
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            assert len(lines) == 2  # header + 1 data line
+            
+            # Check data line - None values should be empty strings
+            # Remove only newline to preserve tab-delimited format
+            data = lines[1].rstrip('\n').split('\t')
+            assert len(data) == 19  # Verify all fields present
+            assert data[0] == "seq1"
+            assert data[15] == ""  # subject_rank_tid
+            assert data[16] == ""  # subject_rank_name
+            assert data[17] == ""  # subject_phylum_tid
+            assert data[18] == ""  # subject_phylum_name
+    
+    def test_rewrite_blast_hits_without_header(self):
+        """Test writing blast hits without header."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "blast_hits.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1',
+                    subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.0,
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1,
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998.0,
+                    query_coverage=100.0,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella",
+                    subject_phylum_tid="1224",
+                    subject_phylum_name="Pseudomonadota"
+                )
+            ]
+            
+            result = rewrite_blast_hits(hits, output_file, header=False)
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # No header, just data line
+            assert len(lines) == 1
+            
+            # Check data line
+            data = lines[0].strip().split('\t')
+            assert data[0] == "seq1"
+            assert data[1] == "gi|156763568|gb|EU014687.1|"
+    
+    def test_rewrite_blast_hits_empty_list(self):
+        """Test writing blast hits with empty list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "blast_hits.tsv"
+            
+            hits = []
+            
+            result = rewrite_blast_hits(hits, output_file, header=True)
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Should only have header, no data lines
+            assert len(lines) == 1
+            
+            # Check header exists with all expected fields
+            header = lines[0].strip().split('\t')
+            assert header == self.EXPECTED_FIELDS
+    
+    def test_rewrite_blast_hits_multiple_records(self):
+        """Test writing multiple blast hits."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "blast_hits.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1',
+                    subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.0,
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1,
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998.0,
+                    query_coverage=100.0,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella",
+                    subject_phylum_tid="1224",
+                    subject_phylum_name="Pseudomonadota"
+                ),
+                BlastHit(
+                    query_id='seq2',
+                    subject_id='gi|34190046|gb|BC014593.2|',
+                    percent_identity=95.5,
+                    alignment_length=420,
+                    query_length=420,
+                    subject_length=784,
+                    query_start=1,
+                    query_end=420,
+                    subject_start=1,
+                    subject_end=420,
+                    evalue=1e-100,
+                    bit_score=776.0,
+                    query_coverage=100.0,
+                    subject_taxid="9606",
+                    subject_taxids="9606",
+                    subject_rank_tid="9605",
+                    subject_rank_name="Homo",
+                    subject_phylum_tid="7711",
+                    subject_phylum_name="Chordata"
+                )
+            ]
+            
+            result = rewrite_blast_hits(hits, output_file, header=True)
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            assert len(lines) == 3  # header + 2 data lines
+            
+            # Check first data line
+            data1 = lines[1].strip().split('\t')
+            assert data1[0] == "seq1"
+            assert data1[17] == "1224"
+            assert data1[18] == "Pseudomonadota"
+            
+            # Check second data line
+            data2 = lines[2].strip().split('\t')
+            assert data2[0] == "seq2"
+            assert data2[17] == "7711"
+            assert data2[18] == "Chordata"
+
