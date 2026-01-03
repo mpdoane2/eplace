@@ -128,7 +128,7 @@ Notes:
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
-    skip_existing = ! args.overwrite
+    skip_existing = ! args.overwrite_existing_blast
 
     logger.info("=" * 60)
     logger.info("ePLACE BLAST Workflow")
