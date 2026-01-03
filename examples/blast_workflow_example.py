@@ -221,7 +221,7 @@ Notes:
 
     logger.info("Rewriting the blast output file with the new annotations")
     try:
-        result = rewrite_blast_hits(
+        rewrite_blast_hits(
             blast_hits=filtered_hits,
             output_file=args.output_dir / "blast_results_annotated.txt",
             header=True
