@@ -36,11 +36,11 @@ class TaxonomyExtractor:
     
     def parse_taxids(self, tax_ids: list(int)) -> dict(int, str):
         """
-        Parse taxonomic information from the taxonomy ID from the BLAST hits
+        Parse taxonomic information from the taxonomy IDs from the BLAST hits
         and return a dict of the taxids and their genus
 
         Args:
-            tax_id: the taxonomy ID reported by BLAST
+            tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
             the taxonomy infomation for that rank.
