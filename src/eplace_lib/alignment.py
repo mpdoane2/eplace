@@ -509,7 +509,6 @@ def process_query_alignment_and_tree(
     if IQTreeBuilder.build_tree(
         alignment_fasta=alignment_fasta,
         output_prefix=tree_prefix,
-        num_threads=num_threads
     ):
         results['tree'] = tree_file
         logger.info(f"Tree saved to: {tree_file}")
@@ -902,7 +901,6 @@ def process_grouped_alignment_and_tree(
     if IQTreeBuilder.build_tree(
         alignment_fasta=alignment_fasta,
         output_prefix=tree_prefix,
-        num_threads=num_threads
     ):
         results['tree'] = tree_file
         logger.info(f"Tree saved to: {tree_file}")
