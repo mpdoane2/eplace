@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=blastn
+#SBATCH --job-name=eplacer
 #SBATCH --time=5-0
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
