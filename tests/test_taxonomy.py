@@ -86,8 +86,8 @@ class TestTaxonomyExtractor:
         salm_group = ('1236', 'Gammaproteobacteria')
         assert tax_info["9606"] == homo_tuple
         assert tax_info["590"] == salm_tuple
-        assert phyla_info['9606'] == homo_group
-        assert phyla_info['590'] == salm_group
+        assert group_info['9606'] == homo_group
+        assert group_info['590'] == salm_group
     
     def test_group_hits_by_query(self):
         """Test grouping BLAST hits by query."""
