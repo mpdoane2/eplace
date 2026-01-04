@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
 from .blast_analysis import BlastHit, FastaReader
+from collections import defaultdict
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -524,5 +525,395 @@ def process_query_alignment_and_tree(
         logger.info(f"Labeled tree saved to: {labeled_tree}")
     else:
         logger.warning(f"Failed to relabel tree for {query_id}, but unlabeled tree is available")
+    
+    return results
+
+
+def check_alignment_consistency(blast_hits: List[BlastHit], tolerance: int = 50) -> Dict[str, bool]:
+    """
+    Check if BLAST hits align to similar locations on reference sequences.
+    
+    For each reference sequence that appears in multiple hits, check if the alignment
+    coordinates are consistent (within tolerance).
+    
+    Args:
+        blast_hits: List of BlastHit objects to check
+        tolerance: Maximum allowed difference in coordinates (default: 50 bp)
+        
+    Returns:
+        Dictionary mapping subject_id to consistency status (True if consistent)
+    """
+    # Group hits by subject sequence
+    hits_by_subject = defaultdict(list)
+    for hit in blast_hits:
+        hits_by_subject[hit.subject_id].append(hit)
+    
+    consistency_status = {}
+    
+    for subject_id, subject_hits in hits_by_subject.items():
+        if len(subject_hits) == 1:
+            # Only one hit, so it's consistent by definition
+            consistency_status[subject_id] = True
+            continue
+        
+        # Check if all hits have similar start and end coordinates
+        starts = [hit.subject_start for hit in subject_hits]
+        ends = [hit.subject_end for hit in subject_hits]
+        
+        start_range = max(starts) - min(starts)
+        end_range = max(ends) - min(ends)
+        
+        is_consistent = start_range <= tolerance and end_range <= tolerance
+        consistency_status[subject_id] = is_consistent
+        
+        if not is_consistent:
+            logger.warning(
+                f"Subject {subject_id} has inconsistent alignments: "
+                f"start range={start_range}, end range={end_range}"
+            )
+        else:
+            logger.info(
+                f"Subject {subject_id} has consistent alignments across {len(subject_hits)} hits"
+            )
+    
+    return consistency_status
+
+
+def group_hits_by_group_rank(
+    blast_hits: List[BlastHit]
+) -> Dict[str, Dict[str, List[BlastHit]]]:
+    """
+    Group BLAST hits by group_rank across all queries.
+    
+    Args:
+        blast_hits: List of BlastHit objects with group taxonomy information
+        
+    Returns:
+        Dictionary mapping group_rank_tid to another dict mapping query_id to list of hits
+        Format: {group_rank_tid: {query_id: [hits]}}
+    """
+    grouped = defaultdict(lambda: defaultdict(list))
+    
+    for hit in blast_hits:
+        if hit.subject_group_tid:
+            grouped[hit.subject_group_tid][hit.query_id].append(hit)
+        else:
+            logger.warning(
+                f"Hit {hit.subject_id} for query {hit.query_id} has no group taxonomy information"
+            )
+    
+    logger.info(f"Grouped hits into {len(grouped)} taxonomic groups")
+    for group_tid, queries in grouped.items():
+        # Get group name from first hit
+        group_name = None
+        for query_hits in queries.values():
+            if query_hits:
+                group_name = query_hits[0].subject_group_name
+                break
+        logger.info(
+            f"  Group {group_name} ({group_tid}): {len(queries)} queries, "
+            f"{sum(len(hits) for hits in queries.values())} total hits"
+        )
+    
+    return dict(grouped)
+
+
+def create_grouped_fasta_with_queries(
+    group_tid: str,
+    group_name: str,
+    query_hits_map: Dict[str, List[BlastHit]],
+    query_fasta: Path,
+    output_fasta: Path,
+    database: str = "core_nt",
+    blastdb_path: Optional[Path] = None
+) -> bool:
+    """
+    Create a FASTA file for a taxonomic group containing all queries and unique references.
+    
+    Args:
+        group_tid: Taxonomy ID of the group
+        group_name: Name of the taxonomic group
+        query_hits_map: Dictionary mapping query_id to list of BlastHit objects
+        query_fasta: Path to original query FASTA file
+        output_fasta: Path to output grouped FASTA file
+        database: Name of BLAST database
+        blastdb_path: Path to BLAST database directory
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    from .taxonomy import SequenceExtractor
+    
+    logger.info(f"Creating grouped FASTA for {group_name} ({group_tid})")
+    
+    # Read all query sequences
+    try:
+        query_sequences = FastaReader.read_fasta(query_fasta)
+    except Exception as e:
+        logger.error(f"Error reading query FASTA: {e}")
+        return False
+    
+    # Collect unique reference sequences (by subject_id)
+    # For each unique reference, keep the hit with the best bit score
+    unique_references = {}
+    for query_id, hits in query_hits_map.items():
+        for hit in hits:
+            if hit.subject_id not in unique_references:
+                unique_references[hit.subject_id] = hit
+            else:
+                # Keep the hit with better bit score
+                if hit.bit_score > unique_references[hit.subject_id].bit_score:
+                    unique_references[hit.subject_id] = hit
+    
+    logger.info(f"Found {len(unique_references)} unique reference sequences")
+    
+    # Extract reference sequences
+    seq_extractor = SequenceExtractor(blastdb_path)
+    temp_ref_fasta = output_fasta.parent / f"{output_fasta.stem}_temp_refs.fasta"
+    
+    try:
+        success = seq_extractor.extract_sequences(
+            sequence_ids=list(unique_references.keys()),
+            output_fasta=temp_ref_fasta,
+            database=database
+        )
+        
+        if not success:
+            logger.error("Failed to extract reference sequences")
+            return False
+        
+        # Read extracted references
+        ref_sequences = FastaReader.read_fasta(temp_ref_fasta)
+        
+        # Write combined FASTA file
+        with open(output_fasta, 'w') as out:
+            # Write all query sequences first
+            for query_id in query_hits_map.keys():
+                if query_id in query_sequences:
+                    query_seq = query_sequences[query_id]
+                    out.write(f">{query_id}\n")
+                    for i in range(0, len(query_seq), 60):
+                        out.write(query_seq[i:i+60] + "\n")
+                    logger.info(f"Added query {query_id} ({len(query_seq)} bp)")
+            
+            # Write reference sequences with taxonomic labels
+            for subject_id, hit in unique_references.items():
+                # Get accession for lookup
+                accession = hit.get_accession()
+                if accession in ref_sequences:
+                    ref_seq = ref_sequences[accession]
+                    header = accession
+                    if hit.subject_rank_name:
+                        header = f"{accession} {hit.subject_rank_name}"
+                    
+                    out.write(f">{header}\n")
+                    for i in range(0, len(ref_seq), 60):
+                        out.write(ref_seq[i:i+60] + "\n")
+                    logger.info(f"Added reference {accession} ({len(ref_seq)} bp)")
+        
+        logger.info(f"Created grouped FASTA file: {output_fasta}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating grouped FASTA: {e}")
+        return False
+    finally:
+        # Clean up temporary file
+        if temp_ref_fasta.exists():
+            temp_ref_fasta.unlink()
+
+
+def trim_grouped_sequences(
+    input_fasta: Path,
+    blast_hits: List[BlastHit],
+    output_fasta: Path,
+    query_ids: List[str]
+) -> bool:
+    """
+    Trim sequences in a grouped FASTA file based on BLAST hit coordinates.
+    
+    This is similar to trim_sequences_from_blast_hits but handles multiple queries.
+    
+    Args:
+        input_fasta: Path to input FASTA file with full-length sequences
+        blast_hits: List of BlastHit objects for all queries in the group
+        output_fasta: Path to output FASTA file with trimmed sequences
+        query_ids: List of query sequence IDs to include (untrimmed)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Read all sequences from the input FASTA
+        sequences = FastaReader.read_fasta(input_fasta)
+        
+        # Create a mapping of subject accession to blast hits
+        hit_map = {}
+        for hit in blast_hits:
+            accession = hit.get_accession()
+            if accession not in hit_map:
+                hit_map[accession] = []
+            hit_map[accession].append(hit)
+        
+        # For sequences with multiple hits, use the one with the widest range
+        best_hits = {}
+        for accession, hits in hit_map.items():
+            if len(hits) == 1:
+                best_hits[accession] = hits[0]
+            else:
+                # Use the hit with the longest alignment
+                best_hits[accession] = max(hits, key=lambda h: abs(h.subject_end - h.subject_start))
+        
+        # Open output file
+        with open(output_fasta, 'w') as out:
+            # First, write all query sequences (untrimmed)
+            for query_id in query_ids:
+                if query_id in sequences:
+                    query_seq = sequences[query_id]
+                    out.write(f">{query_id}\n")
+                    for i in range(0, len(query_seq), 60):
+                        out.write(query_seq[i:i+60] + "\n")
+                    logger.info(f"Added query sequence {query_id} ({len(query_seq)} bp)")
+            
+            # Now process subject sequences (trimmed)
+            for seq_id, sequence in sequences.items():
+                if seq_id in query_ids:
+                    continue  # Skip queries, already written
+                
+                # Extract just the accession from the header (might have taxonomy info)
+                accession = seq_id.split()[0]
+                hit = best_hits.get(accession)
+                
+                if hit is None:
+                    logger.warning(f"No BLAST hit found for sequence {accession}, skipping")
+                    continue
+                
+                # Trim the sequence based on subject coordinates
+                trimmed_seq = SequenceTrimmer.trim_sequence_by_coordinates(
+                    sequence,
+                    hit.subject_start,
+                    hit.subject_end
+                )
+                
+                # Write trimmed sequence
+                out.write(f">{seq_id}\n")
+                for i in range(0, len(trimmed_seq), 60):
+                    out.write(trimmed_seq[i:i+60] + "\n")
+                
+                logger.info(
+                    f"Trimmed {accession} from {len(sequence)} bp to {len(trimmed_seq)} bp "
+                    f"(coords: {hit.subject_start}-{hit.subject_end})"
+                )
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error trimming grouped sequences: {e}")
+        return False
+
+
+def process_grouped_alignment_and_tree(
+    group_tid: str,
+    group_name: str,
+    group_dir: Path,
+    blast_hits: List[BlastHit],
+    query_ids: List[str],
+    num_threads: int = 1
+) -> Dict[str, Optional[Path]]:
+    """
+    Complete pipeline for a taxonomic group: trim, align, and build tree.
+    
+    Args:
+        group_tid: Taxonomy ID of the group
+        group_name: Name of the taxonomic group
+        group_dir: Directory containing group-specific files
+        blast_hits: List of BlastHit objects for all queries in the group
+        query_ids: List of query sequence IDs in this group
+        num_threads: Number of threads to use
+        
+    Returns:
+        Dictionary with paths to generated files:
+            - 'combined_fasta': Combined sequences (queries + references)
+            - 'trimmed_fasta': Trimmed sequences
+            - 'alignment': Aligned sequences
+            - 'tree': Phylogenetic tree
+            - 'labeled_tree': Tree with taxonomic labels
+    """
+    results = {
+        'combined_fasta': None,
+        'trimmed_fasta': None,
+        'alignment': None,
+        'tree': None,
+        'labeled_tree': None
+    }
+    
+    # File paths
+    safe_group_name = group_name.replace(' ', '_').replace('/', '_').replace('|', '_')
+    combined_fasta = group_dir / f"{safe_group_name}_combined.fasta"
+    trimmed_fasta = group_dir / f"{safe_group_name}_trimmed.fasta"
+    alignment_fasta = group_dir / f"{safe_group_name}_aligned.fasta"
+    tree_prefix = group_dir / f"{safe_group_name}_tree"
+    tree_file = Path(str(tree_prefix) + ".treefile")
+    labeled_tree = group_dir / f"{safe_group_name}_tree_labeled.treefile"
+    
+    # Check if combined FASTA exists
+    if not combined_fasta.exists():
+        logger.error(f"Combined FASTA file not found: {combined_fasta}")
+        return results
+    
+    results['combined_fasta'] = combined_fasta
+    
+    # Step 1: Trim sequences based on BLAST coordinates
+    logger.info(f"Trimming sequences for group {group_name}...")
+    if trim_grouped_sequences(
+        input_fasta=combined_fasta,
+        blast_hits=blast_hits,
+        output_fasta=trimmed_fasta,
+        query_ids=query_ids
+    ):
+        results['trimmed_fasta'] = trimmed_fasta
+        logger.info(f"Trimmed sequences saved to: {trimmed_fasta}")
+    else:
+        logger.error(f"Failed to trim sequences for group {group_name}")
+        return results
+    
+    # Step 2: Align sequences with MAFFT
+    logger.info(f"Aligning sequences for group {group_name}...")
+    if MAFFTAligner.align_sequences(
+        input_fasta=trimmed_fasta,
+        output_fasta=alignment_fasta,
+        auto_orient=True,
+        num_threads=num_threads
+    ):
+        results['alignment'] = alignment_fasta
+        logger.info(f"Alignment saved to: {alignment_fasta}")
+    else:
+        logger.error(f"Failed to align sequences for group {group_name}")
+        return results
+    
+    # Step 3: Build phylogenetic tree with IQTree
+    logger.info(f"Building phylogenetic tree for group {group_name}...")
+    if IQTreeBuilder.build_tree(
+        alignment_fasta=alignment_fasta,
+        output_prefix=tree_prefix,
+        num_threads=num_threads
+    ):
+        results['tree'] = tree_file
+        logger.info(f"Tree saved to: {tree_file}")
+    else:
+        logger.error(f"Failed to build tree for group {group_name}")
+        return results
+    
+    # Step 4: Relabel tree with taxonomic names
+    logger.info(f"Relabeling tree with taxonomic names for group {group_name}...")
+    if IQTreeBuilder.relabel_tree_with_taxonomy(
+        tree_file=tree_file,
+        blast_hits=blast_hits,
+        output_tree=labeled_tree
+    ):
+        results['labeled_tree'] = labeled_tree
+        logger.info(f"Labeled tree saved to: {labeled_tree}")
+    else:
+        logger.warning(f"Failed to relabel tree for group {group_name}, but unlabeled tree is available")
     
     return results
