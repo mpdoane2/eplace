@@ -695,6 +695,8 @@ def create_grouped_fasta_with_queries(
                     for i in range(0, len(query_seq), 60):
                         out.write(query_seq[i:i+60] + "\n")
                     logger.info(f"Added query {query_id} ({len(query_seq)} bp)")
+                else:
+                    logger.warning(f"Query {query_id} not found in query FASTA file, skipping")
             
             # Write reference sequences with taxonomic labels
             for subject_id, hit in unique_references.items():
@@ -710,6 +712,8 @@ def create_grouped_fasta_with_queries(
                     for i in range(0, len(ref_seq), 60):
                         out.write(ref_seq[i:i+60] + "\n")
                     logger.info(f"Added reference {accession} ({len(ref_seq)} bp)")
+                else:
+                    logger.warning(f"Reference {accession} not found in extracted sequences, skipping")
         
         logger.info(f"Created grouped FASTA file: {output_fasta}")
         return True
@@ -785,7 +789,7 @@ def trim_grouped_sequences(
                 hit = best_hits.get(accession)
                 
                 if hit is None:
-                    logger.warning(f"No BLAST hit found for sequence {accession}, skipping")
+                    logger.error(f"No BLAST hit found for sequence {accession}, data consistency issue")
                     continue
                 
                 # Trim the sequence based on subject coordinates
