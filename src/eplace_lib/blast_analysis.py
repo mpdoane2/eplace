@@ -61,6 +61,51 @@ class BlastHit:
     subject_rank_name: Optional[str] = None
     subject_phylum_tid: Optional[str] = None
     subject_phylum_name: Optional[str] = None
+    
+    def get_accession(self) -> str:
+        """
+        Extract the accession number from the subject_id.
+        
+        BLAST IDs can be in various formats:
+        - gi|2273658778|gb|MZ387488.1| -> MZ387488.1
+        - ref|NZ_CP123456.1| -> NZ_CP123456.1
+        - gb|MZ387488.1| -> MZ387488.1
+        - MZ387488.1 -> MZ387488.1 (already in accession format)
+        
+        Note: gnl|database|identifier format is handled by returning the identifier,
+        but these may not be standard accessions.
+        
+        Returns:
+            The accession number extracted from subject_id, or the full subject_id
+            if no standard format is detected
+        """
+        # If the ID contains pipes, it's in a structured format
+        if '|' in self.subject_id:
+            parts = self.subject_id.split('|')
+            
+            # Handle gnl|database|identifier format separately
+            if len(parts) >= 3 and parts[0] == 'gnl':
+                return parts[2]
+            
+            # Look for standard database identifiers
+            # Common formats: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|
+            db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
+            for i, part in enumerate(parts):
+                if part in db_identifiers:
+                    # Next part should be the accession
+                    if i + 1 < len(parts) and parts[i + 1]:
+                        return parts[i + 1]
+            
+            # If no known database identifier found, try to return a reasonable fallback
+            # Filter out empty strings and known non-accession prefixes
+            known_prefixes = ['gi']
+            non_empty = [p for p in parts if p and p not in known_prefixes]
+            if non_empty:
+                # Return the last non-empty part (most likely to be the accession)
+                return non_empty[-1]
+        
+        # If no pipes or couldn't parse, assume it's already an accession
+        return self.subject_id
 
 class FastaReader:
     """

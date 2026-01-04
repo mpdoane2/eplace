@@ -22,6 +22,12 @@ from .taxonomy import (
     SequenceExtractor,
     process_blast_results_for_taxonomy
 )
+from .alignment import (
+    SequenceTrimmer,
+    MAFFTAligner,
+    IQTreeBuilder,
+    process_query_alignment_and_tree
+)
 
 __all__ = [
     "SequenceAnalyzer",
@@ -33,5 +39,9 @@ __all__ = [
     "run_blast_search",
     "TaxonomyExtractor",
     "SequenceExtractor",
-    "process_blast_results_for_taxonomy"
+    "process_blast_results_for_taxonomy",
+    "SequenceTrimmer",
+    "MAFFTAligner",
+    "IQTreeBuilder",
+    "process_query_alignment_and_tree"
 ]
