@@ -511,16 +511,16 @@ class TestProcessBlastResultsForTaxonomy:
             
             # Verify phylum information is correctly set on blast hits
             # seq1 has taxid 149539 (Salmonella) which should map to Pseudomonadota phylum
-            assert hits[0].subject_phylum_tid == '1224'
-            assert hits[0].subject_phylum_name == 'Pseudomonadota'
+            assert hits[0].subject_group_tid == '1224'
+            assert hits[0].subject_group_name == 'Pseudomonadota'
             
             # seq2 has taxid 9606 (Homo sapiens) which should map to Chordata phylum
-            assert hits[1].subject_phylum_tid == '7711'
-            assert hits[1].subject_phylum_name == 'Chordata'
+            assert hits[1].subject_group_tid == '7711'
+            assert hits[1].subject_group_name == 'Chordata'
             
             # seq3 has taxid 9597 (Pan) which should also map to Chordata phylum
-            assert hits[2].subject_phylum_tid == '7711'
-            assert hits[2].subject_phylum_name == 'Chordata'
+            assert hits[2].subject_group_tid == '7711'
+            assert hits[2].subject_group_name == 'Chordata'
 
 class TestRewriteBlastHits:
     """Test cases for rewrite_blast_hits function."""
@@ -532,7 +532,7 @@ class TestRewriteBlastHits:
         "subject_start", "subject_end", "evalue", "bit_score",
         "query_coverage", "subject_taxid", "subject_taxids",
         "subject_rank_tid", "subject_rank_name",
-        "subject_phylum_tid", "subject_phylum_name"
+        "subject_group_tid", "subject_group_name"
     ]
     
     def test_rewrite_blast_hits_with_complete_annotations(self):
@@ -560,8 +560,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 )
             ]
             
@@ -614,8 +614,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid=None,
                     subject_rank_name=None,
-                    subject_phylum_tid=None,
-                    subject_phylum_name=None
+                    subject_group_tid=None,
+                    subject_group_name=None
                 )
             ]
             
@@ -637,8 +637,8 @@ class TestRewriteBlastHits:
             assert data[0] == "seq1"
             assert data[15] == ""  # subject_rank_tid
             assert data[16] == ""  # subject_rank_name
-            assert data[17] == ""  # subject_phylum_tid
-            assert data[18] == ""  # subject_phylum_name
+            assert data[17] == ""  # subject_group_tid
+            assert data[18] == ""  # subject_group_name
     
     def test_rewrite_blast_hits_without_header(self):
         """Test writing blast hits without header."""
@@ -665,8 +665,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 )
             ]
             
@@ -863,8 +863,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 ),
                 BlastHit(
                     query_id='seq2',
@@ -884,8 +884,8 @@ class TestRewriteBlastHits:
                     subject_taxids="9606",
                     subject_rank_tid="9605",
                     subject_rank_name="Homo",
-                    subject_phylum_tid="7711",
-                    subject_phylum_name="Chordata"
+                    subject_group_tid="7711",
+                    subject_group_name="Chordata"
                 )
             ]
             
