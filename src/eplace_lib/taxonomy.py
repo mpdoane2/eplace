@@ -102,7 +102,8 @@ class TaxonomyExtractor:
     def select_representatives_by_rank(
         self,
         hits: list[BlastHit],
-        max_per_rank: int = 1
+        max_per_rank: int = 1,
+        preferred_representatives: Optional[Dict[str, str]] = None
     ) -> list[BlastHit]:
         """
         Select representative sequences per taxonomic rank.
@@ -110,19 +111,27 @@ class TaxonomyExtractor:
         Args:
             hits: list of BlastHit objects for a single query
             max_per_rank: Maximum number of representatives per rank (default: 1)
+            preferred_representatives: Optional dictionary mapping rank_tid to preferred subject_id
+                                      to ensure consistent representatives across queries
             
         Returns:
             list of representative BlastHit objects
         """
+        
+        if preferred_representatives is None:
+            preferred_representatives = {}
         
         # Group hits by taxonomic rank (using subject_id as proxy)
         rank_groups = defaultdict(list)
         
         reported_hits = set()
         for hit in hits:
-            if hit.subject_rank_tid and hit.subject_rank_name not in reported_hits:
-                logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
-                reported_hits.add(hit.subject_rank_name)
+            if hit.subject_rank_tid:
+                # Log the first time we see each rank name
+                if hit.subject_rank_name not in reported_hits:
+                    logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
+                    reported_hits.add(hit.subject_rank_name)
+                # Add all hits with taxonomic information to rank_groups
                 rank_groups[hit.subject_rank_tid].append(hit)
             elif not hit.subject_rank_tid:
                 logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
@@ -130,7 +139,24 @@ class TaxonomyExtractor:
         # Select best representative from each rank
         representatives = []
         for rank_key, rank_hits in rank_groups.items():
-            # Sort by bit score (best first)
+            # Check if we have a preferred representative for this rank
+            preferred_subject_id = preferred_representatives.get(rank_key)
+            
+            if preferred_subject_id:
+                # Look for the preferred representative in the current hits
+                preferred_hit = next(
+                    (hit for hit in rank_hits if hit.subject_id == preferred_subject_id),
+                    None
+                )
+                
+                if preferred_hit:
+                    # Use the preferred representative
+                    logger.info(f"Reusing previously selected representative {preferred_subject_id} for rank {rank_key}")
+                    representatives.append(preferred_hit)
+                    continue
+            
+            # No preferred representative or it's not in current hits
+            # Sort by bit score (best first) and select new representative
             rank_hits.sort(key=lambda h: h.bit_score, reverse=True)
             
             # Take top N representatives
@@ -396,19 +422,30 @@ def process_blast_results_for_taxonomy(
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
     
+    # Track selected representatives across queries to ensure consistency
+    # Maps rank_tid -> subject_id of the selected representative
+    preferred_representatives = {}
+    
     # Process each query
     results = {}
     
     for query_id, query_hits in grouped_hits.items():
         logger.info(f"Processing query {query_id} with {len(query_hits)} hits")
         
-        # Select representatives
+        # Select representatives, preferring previously selected ones
         representatives = tax_extractor.select_representatives_by_rank(
             hits=query_hits,
+            preferred_representatives=preferred_representatives
         )
         if len(representatives) == 0:
             logger.warning(f"Error: No representative sequences for {query_id} at rank {rank}")
             continue
+        
+        # Update the preferred representatives with newly selected ones
+        for rep in representatives:
+            if rep.subject_rank_tid and rep.subject_rank_tid not in preferred_representatives:
+                preferred_representatives[rep.subject_rank_tid] = rep.subject_id
+                logger.info(f"Recording {rep.subject_id} as representative for rank {rep.subject_rank_tid}")
         
         # Create query-specific output directory
         query_output_dir = output_dir / query_id.replace('|', '_').replace('/', '_')

@@ -123,6 +123,113 @@ class TestTaxonomyExtractor:
         )
         
         assert len(representatives) == 0
+    
+    def test_select_representatives_with_preferred(self):
+        """Test that preferred representatives are reused when available."""
+        extractor = self.taxonomy_extractor
+        
+        # First query with two hits from the same genus
+        first_query_hits = [
+            BlastHit(
+                query_id='query1', subject_id='subject1',
+                percent_identity=95.0, 
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1, 
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=0.0,
+                bit_score=900,
+                query_coverage=100,
+                subject_taxid="12345",
+                subject_taxids="12345",
+                subject_rank_tid="590",
+                subject_rank_name="Salmonella"
+            ),
+            BlastHit(
+                query_id='query1', subject_id='subject2',
+                percent_identity=98.0, 
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1, 
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=0.0,
+                bit_score=950,  # Higher score - should be selected
+                query_coverage=100,
+                subject_taxid="12346",
+                subject_taxids="12346",
+                subject_rank_tid="590",
+                subject_rank_name="Salmonella"
+            ),
+        ]
+        
+        # Select representatives for first query (no preferred yet)
+        reps1 = extractor.select_representatives_by_rank(
+            hits=first_query_hits
+        )
+        
+        # Should select subject2 (higher bit score)
+        assert len(reps1) == 1
+        assert reps1[0].subject_id == 'subject2'
+        
+        # Build preferred representatives dict
+        preferred = {reps1[0].subject_rank_tid: reps1[0].subject_id}
+        
+        # Second query with same genus but different scores
+        second_query_hits = [
+            BlastHit(
+                query_id='query2', subject_id='subject1',
+                percent_identity=95.0, 
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1, 
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=0.0,
+                bit_score=850,
+                query_coverage=100,
+                subject_taxid="12345",
+                subject_taxids="12345",
+                subject_rank_tid="590",
+                subject_rank_name="Salmonella"
+            ),
+            BlastHit(
+                query_id='query2', subject_id='subject2',
+                percent_identity=92.0, 
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1, 
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=0.0,
+                bit_score=800,  # Lower score than subject1
+                query_coverage=100,
+                subject_taxid="12346",
+                subject_taxids="12346",
+                subject_rank_tid="590",
+                subject_rank_name="Salmonella"
+            ),
+        ]
+        
+        # Select representatives for second query with preferred
+        reps2 = extractor.select_representatives_by_rank(
+            hits=second_query_hits,
+            preferred_representatives=preferred
+        )
+        
+        # Should still select subject2 (from preferred), even though subject1 has higher score
+        assert len(reps2) == 1
+        assert reps2[0].subject_id == 'subject2'
+
 
 
 class TestSequenceExtractor:
@@ -404,16 +511,16 @@ class TestProcessBlastResultsForTaxonomy:
             
             # Verify phylum information is correctly set on blast hits
             # seq1 has taxid 149539 (Salmonella) which should map to Pseudomonadota phylum
-            assert hits[0].subject_phylum_tid == '1224'
-            assert hits[0].subject_phylum_name == 'Pseudomonadota'
+            assert hits[0].subject_group_tid == '1224'
+            assert hits[0].subject_group_name == 'Pseudomonadota'
             
             # seq2 has taxid 9606 (Homo sapiens) which should map to Chordata phylum
-            assert hits[1].subject_phylum_tid == '7711'
-            assert hits[1].subject_phylum_name == 'Chordata'
+            assert hits[1].subject_group_tid == '7711'
+            assert hits[1].subject_group_name == 'Chordata'
             
             # seq3 has taxid 9597 (Pan) which should also map to Chordata phylum
-            assert hits[2].subject_phylum_tid == '7711'
-            assert hits[2].subject_phylum_name == 'Chordata'
+            assert hits[2].subject_group_tid == '7711'
+            assert hits[2].subject_group_name == 'Chordata'
 
 class TestRewriteBlastHits:
     """Test cases for rewrite_blast_hits function."""
@@ -425,7 +532,7 @@ class TestRewriteBlastHits:
         "subject_start", "subject_end", "evalue", "bit_score",
         "query_coverage", "subject_taxid", "subject_taxids",
         "subject_rank_tid", "subject_rank_name",
-        "subject_phylum_tid", "subject_phylum_name"
+        "subject_group_tid", "subject_group_name"
     ]
     
     def test_rewrite_blast_hits_with_complete_annotations(self):
@@ -453,8 +560,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 )
             ]
             
@@ -507,8 +614,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid=None,
                     subject_rank_name=None,
-                    subject_phylum_tid=None,
-                    subject_phylum_name=None
+                    subject_group_tid=None,
+                    subject_group_name=None
                 )
             ]
             
@@ -530,8 +637,8 @@ class TestRewriteBlastHits:
             assert data[0] == "seq1"
             assert data[15] == ""  # subject_rank_tid
             assert data[16] == ""  # subject_rank_name
-            assert data[17] == ""  # subject_phylum_tid
-            assert data[18] == ""  # subject_phylum_name
+            assert data[17] == ""  # subject_group_tid
+            assert data[18] == ""  # subject_group_name
     
     def test_rewrite_blast_hits_without_header(self):
         """Test writing blast hits without header."""
@@ -558,8 +665,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 )
             ]
             
@@ -579,6 +686,133 @@ class TestRewriteBlastHits:
             data = lines[0].strip().split('\t')
             assert data[0] == "seq1"
             assert data[1] == "gi|156763568|gb|EU014687.1|"
+    
+    @patch('eplace_lib.taxonomy.SequenceExtractor.extract_representatives_for_query')
+    @patch('eplace_lib.taxonomy.TaxonomyExtractor.parse_taxids')
+    def test_process_blast_results_reuses_representatives(self, mock_parse_taxids, mock_extract):
+        """Test that the same representative sequence is used across multiple queries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Mock the taxonomy parsing to return taxonomy info
+            # Map taxid to (rank_tid, rank_name) for genus level
+            mock_parse_taxids.return_value = (
+                {
+                    "149539": ("590", "Salmonella"),
+                    "149540": ("590", "Salmonella")
+                },
+                {}  # Empty phylum dict for this test
+            )
+            
+            # Create hits where two queries match the same genus (Salmonella)
+            hits = [
+                # Query 1 hits - Salmonella genus
+                BlastHit(
+                    query_id='query1', subject_id='subject_a',
+                    percent_identity=95.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=900,
+                    query_coverage=100,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
+                ),
+                BlastHit(
+                    query_id='query1', subject_id='subject_b',
+                    percent_identity=98.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=950,  # Highest score - should be selected first
+                    query_coverage=100,
+                    subject_taxid="149540",
+                    subject_taxids="149540",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
+                ),
+                # Query 2 hits - Also Salmonella genus
+                BlastHit(
+                    query_id='query2', subject_id='subject_a',
+                    percent_identity=97.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=920,  # Higher than subject_b for this query
+                    query_coverage=100,
+                    subject_taxid="149539",
+                    subject_taxids="149539",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
+                ),
+                BlastHit(
+                    query_id='query2', subject_id='subject_b',
+                    percent_identity=94.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=880,  # Lower than subject_a for this query
+                    query_coverage=100,
+                    subject_taxid="149540",
+                    subject_taxids="149540",
+                    subject_rank_tid="590",
+                    subject_rank_name="Salmonella"
+                ),
+            ]
+            
+            # Track what representatives were extracted for each query
+            extracted_representatives = {}
+            
+            def track_extraction(query_id: str, representative_hits: list, output_dir: Path, database: str = 'core_nt') -> Path:
+                # Store the subject IDs that were extracted
+                extracted_representatives[query_id] = [hit.subject_id for hit in representative_hits]
+                return tmppath / f"{query_id}_output.fasta"
+            
+            mock_extract.side_effect = track_extraction
+            
+            results = process_blast_results_for_taxonomy(
+                blast_hits=hits,
+                output_dir=tmppath,
+                rank='genus'
+            )
+            
+            # Both queries should have results
+            assert len(results) == 2
+            assert 'query1' in results
+            assert 'query2' in results
+            
+            # Query1 should select subject_b (highest bit score)
+            assert 'subject_b' in extracted_representatives['query1']
+            
+            # Query2 should ALSO use subject_b (reused from query1),
+            # even though subject_a has a higher bit score for query2
+            assert 'subject_b' in extracted_representatives['query2']
+            
+            # Both queries should use the same representative
+            assert extracted_representatives['query1'] == extracted_representatives['query2']
+
     
     def test_rewrite_blast_hits_empty_list(self):
         """Test writing blast hits with empty list."""
@@ -629,8 +863,8 @@ class TestRewriteBlastHits:
                     subject_taxids="149539",
                     subject_rank_tid="590",
                     subject_rank_name="Salmonella",
-                    subject_phylum_tid="1224",
-                    subject_phylum_name="Pseudomonadota"
+                    subject_group_tid="1224",
+                    subject_group_name="Pseudomonadota"
                 ),
                 BlastHit(
                     query_id='seq2',
@@ -650,8 +884,8 @@ class TestRewriteBlastHits:
                     subject_taxids="9606",
                     subject_rank_tid="9605",
                     subject_rank_name="Homo",
-                    subject_phylum_tid="7711",
-                    subject_phylum_name="Chordata"
+                    subject_group_tid="7711",
+                    subject_group_name="Chordata"
                 )
             ]
             
