@@ -41,6 +41,8 @@ class BlastHit:
         subject_rank_name: the subjects taxonomy name at our rank
         subject_group_tid: the taxonomy ID of the subject's taxon at the group rank (taxonomic rank for grouping)
         subject_group_name: the name of the subject's taxon at the group rank (taxonomic rank for grouping)
+        subject_genus_tid: the taxonomy ID of the subject's genus
+        subject_genus_name: the name of the subject's genus
     """
     query_id: str
     subject_id: str
@@ -61,6 +63,8 @@ class BlastHit:
     subject_rank_name: Optional[str] = None
     subject_group_tid: Optional[str] = None
     subject_group_name: Optional[str] = None
+    subject_genus_tid: Optional[str] = None
+    subject_genus_name: Optional[str] = None
     
     def get_accession(self) -> str:
         """

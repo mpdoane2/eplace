@@ -309,7 +309,7 @@ class IQTreeBuilder:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout
+                timeout=7200  # 2 hour timeout (increased from 1 hour to handle larger datasets)
             )
             
             if result.returncode != 0:
@@ -337,7 +337,7 @@ class IQTreeBuilder:
         tree_file: Path,
         blast_hits: List[BlastHit],
         output_tree: Path,
-        label_field: str = "subject_rank_name"
+        label_field: str = "subject_genus_name"
     ) -> bool:
         """
         Relabel tree nodes with taxonomic names.
@@ -349,7 +349,7 @@ class IQTreeBuilder:
             tree_file: Path to input tree file (Newick format)
             blast_hits: List of BlastHit objects with taxonomic information
             output_tree: Path to output tree file with relabeled nodes
-            label_field: Field from BlastHit to use for labels (default: "subject_rank_name")
+            label_field: Field from BlastHit to use for labels (default: "subject_genus_name")
             
         Returns:
             True if successful, False otherwise
@@ -373,9 +373,13 @@ class IQTreeBuilder:
                     accession = hit.get_accession()
                     label_map[accession] = clean_label
                     # Also handle potential header prefixes from trimmed files
+                    # These may have rank name, genus name, or both
                     if hit.subject_rank_name:
-                        header_with_tax = f"{accession} {hit.subject_rank_name}"
-                        label_map[header_with_tax] = clean_label
+                        header_with_rank = f"{accession} {hit.subject_rank_name}"
+                        label_map[header_with_rank] = clean_label
+                    if hit.subject_genus_name and hit.subject_genus_name != hit.subject_rank_name:
+                        header_with_genus = f"{accession} {hit.subject_genus_name}"
+                        label_map[header_with_genus] = clean_label
             
             # Read the tree file
             with open(tree_file, 'r') as f:

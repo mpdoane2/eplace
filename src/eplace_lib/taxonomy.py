@@ -36,7 +36,7 @@ class TaxonomyExtractor:
         self.rank = rank
         self.group_rank = group_rank
     
-    def parse_taxids(self, tax_ids: list[int]) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
+    def parse_taxids(self, tax_ids: list[int]) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
 
@@ -46,7 +46,8 @@ class TaxonomyExtractor:
         Returns:
             tuple containing:
                 - dict[str, tuple[str, str]]: mapping taxid to (rank_taxid, rank_name) for the specified rank
-                - dict[str, tuple[str, str]]: mapping taxid to (phylum_taxid, phylum_name)
+                - dict[str, tuple[str, str]]: mapping taxid to (group_taxid, group_name) for the group rank
+                - dict[str, tuple[str, str]]: mapping taxid to (genus_taxid, genus_name)
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
@@ -56,7 +57,7 @@ class TaxonomyExtractor:
             df = pytaxonkit.lineage(tax_ids)
         except Exception as e:
             logger.error(f"Error retrieving taxonomic lineages: {e}")
-            return {}, {}
+            return {}, {}, {}
         df['names'] = df['FullLineage'].str.split(';')
         df['taxids'] = df['FullLineageTaxIDs'].str.split(';')
         df['ranks'] = df['FullLineageRanks'].str.split(';')
@@ -79,7 +80,17 @@ class TaxonomyExtractor:
                         )
         }
 
-        return rank_dict, groups_dict
+        # Always extract genus information for tree labeling
+        genus_dict = {
+                str(tid): (str(taxid), str(name))
+                for tid, taxid, name in (
+                            long_df.loc[long_df['ranks'] == 'genus', ['TaxID', 'taxids', 'names']]
+                            .drop_duplicates()
+                            .itertuples(index=False, name=None)
+                        )
+        }
+
+        return rank_dict, groups_dict, genus_dict
     
     def group_hits_by_query(
         self,
@@ -349,6 +360,7 @@ def rewrite_blast_hits(
         "query_coverage", "subject_taxid", "subject_taxids",
         "subject_rank_tid", "subject_rank_name",
         "subject_group_tid", "subject_group_name",
+        "subject_genus_tid", "subject_genus_name",
     ]
 
     with open(output_file, 'w') as out:
@@ -400,7 +412,7 @@ def process_blast_results_for_taxonomy(
     
     # get all the taxonomies
     subject_taxids = {hit.subject_taxid for hit in blast_hits}
-    taxonomies, groups = tax_extractor.parse_taxids(list(subject_taxids))
+    taxonomies, groups, genera = tax_extractor.parse_taxids(list(subject_taxids))
 
     # add all the ranks to all the hits
     for h in blast_hits:
@@ -418,6 +430,13 @@ def process_blast_results_for_taxonomy(
         else:
             h.subject_group_tid = None
             h.subject_group_name = None
+        genus_info = genera.get(h.subject_taxid)
+        if isinstance(genus_info, (list, tuple)) and len(genus_info) >= 2:
+            h.subject_genus_tid = genus_info[0]
+            h.subject_genus_name = genus_info[1]
+        else:
+            h.subject_genus_tid = None
+            h.subject_genus_name = None
 
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
