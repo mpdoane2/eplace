@@ -362,7 +362,9 @@ class TestIQTreeBuilder:
                     subject_taxid="12345",
                     subject_taxids="12345",
                     subject_rank_tid="123",
-                    subject_rank_name="Salmonella"
+                    subject_rank_name="Salmonella",
+                    subject_genus_tid="123",
+                    subject_genus_name="Salmonella"
                 ),
                 BlastHit(
                     query_id='query1',
@@ -380,6 +382,8 @@ class TestIQTreeBuilder:
                     query_coverage=55.6,
                     subject_taxid="67890",
                     subject_taxids="67890",
+                    subject_genus_tid="678",
+                    subject_genus_name="Escherichia coli",
                     subject_rank_tid="678",
                     subject_rank_name="Escherichia coli"
                 )
