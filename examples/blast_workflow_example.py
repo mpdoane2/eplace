@@ -73,7 +73,7 @@ Notes:
     )
 
     parser.add_argument(
-        '--group_rank',
+        '--group-rank',
         type=str,
         default='class',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
@@ -151,7 +151,7 @@ Notes:
     logger.info(f"Query FASTA: {args.query_fasta}")
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Taxonomic rank: {args.rank}")
-    logger.info(f"Taxonomic rank for grouping: {args.group_rank}")
+    logger.info(f"Taxonomic rank for grouping: {args.group-rank}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
     logger.info(f"Overwrite: {args.overwrite_existing_blast} (skip_existing: {skip_existing})")
@@ -220,7 +220,7 @@ Notes:
             blast_hits=filtered_hits,
             output_dir=args.output_dir,
             rank=args.rank,
-            group_rank=args.group_rank,
+            group_rank=args.group-rank,
             database=args.database,
             blastdb_path=args.blastdb_path
         )
