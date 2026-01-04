@@ -271,7 +271,7 @@ class IQTreeBuilder:
         alignment_fasta: Path,
         output_prefix: Path,
         num_threads: int = 1,
-        model: str = "auto"
+        model: str = "MFP"
     ) -> bool:
         """
         Build a phylogenetic tree using IQTree.
@@ -280,7 +280,7 @@ class IQTreeBuilder:
             alignment_fasta: Path to aligned FASTA file
             output_prefix: Prefix for output files
             num_threads: Number of threads to use
-            model: Substitution model (default: "auto" for automatic selection)
+            model: Substitution model (default: "MFP" for automatic ModelFinder Plus selection)
             
         Returns:
             True if tree building was successful, False otherwise
