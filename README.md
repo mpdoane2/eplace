@@ -12,6 +12,9 @@ A Python library for analyzing environmental DNA (eDNA) sequences through BLAST 
 - **Result Filtering**: Filter BLAST results by identity and coverage thresholds
 - **Taxonomic Analysis**: Extract representative sequences per taxonomic rank
 - **Sequence Extraction**: Retrieve sequences from BLAST databases
+- **Sequence Trimming**: Trim reference sequences to aligned regions based on BLAST coordinates
+- **Multiple Sequence Alignment**: Align sequences using MAFFT with auto-orientation
+- **Phylogenetic Trees**: Build and label phylogenetic trees using IQTree
 
 ## Installation
 
@@ -37,6 +40,34 @@ pip install -e ".[dev]"
   
   # macOS with Homebrew
   brew install blast
+  ```
+- TaxonKit (for taxonomy lookup):
+  ```bash
+  # Download from: https://github.com/shenwei356/taxonkit/releases
+  # Or install via conda:
+  conda install -c bioconda taxonkit
+  ```
+- MAFFT (optional, for sequence alignment):
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install mafft
+  
+  # macOS with Homebrew
+  brew install mafft
+  
+  # Or via conda:
+  conda install -c bioconda mafft
+  ```
+- IQTree (optional, for phylogenetic tree building):
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install iqtree
+  
+  # macOS with Homebrew
+  brew install iqtree
+  
+  # Or via conda:
+  conda install -c bioconda iqtree
   ```
 
 ## Quick Start
@@ -75,7 +106,7 @@ results = process_blast_results_for_taxonomy(
 ### 3. Command-Line Interface
 
 ```bash
-# Basic usage
+# Basic usage - BLAST search and representative sequence extraction
 python examples/blast_workflow_example.py query.fasta output_dir
 
 # With custom parameters
@@ -84,6 +115,10 @@ python examples/blast_workflow_example.py query.fasta output_dir \
     --min-identity 95 \
     --min-coverage 85 \
     --num-threads 4
+
+# Skip alignment and tree building (BLAST and extraction only)
+python examples/blast_workflow_example.py query.fasta output_dir \
+    --skip-alignment
 
 # Show help
 python examples/blast_workflow_example.py --help
@@ -150,15 +185,25 @@ eplace/
 3. **Run BLAST**: Use `run_blast_search()` to search against the database
 4. **Filter Results**: Automatically filter by identity and coverage thresholds
 5. **Extract Representatives**: Select representative sequences per taxonomic rank
-6. **Output**: Get FASTA files with representative sequences (one per query)
+6. **Trim Sequences**: Extract aligned regions from reference sequences based on BLAST coordinates
+7. **Align Sequences**: Use MAFFT to align query with trimmed reference sequences (optional)
+8. **Build Tree**: Build phylogenetic tree using IQTree with taxonomic labels (optional)
+9. **Output**: Get FASTA files, alignments, and trees (one set per query)
 
 ## Output Structure
 
 ```
 output_dir/
 ├── blast_results.txt              # Raw BLAST results
+├── blast_results_annotated.txt    # BLAST results with taxonomic annotations
 ├── query1_id/
-│   └── query1_id_representatives.fasta
+│   ├── query1_id_representatives.fasta          # Representative sequences
+│   ├── query1_id_with_query.fasta              # Query + representatives
+│   ├── query1_id_trimmed.fasta                 # Trimmed to aligned regions
+│   ├── query1_id_aligned.fasta                 # Multiple sequence alignment
+│   ├── query1_id_tree.treefile                 # Phylogenetic tree
+│   ├── query1_id_tree_labeled.treefile         # Tree with taxonomic labels
+│   └── query1_id_tree.* (other IQTree files)
 ├── query2_id/
 │   └── query2_id_representatives.fasta
 └── ...

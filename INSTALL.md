@@ -9,7 +9,7 @@ mamba create -yn eplace 'python>=3.12'
 2. Install the required dependencies
 
 ```
-mamba install -y bioconda::blast bioconda::pytaxonkit
+mamba install -y bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
 ```
 
 > Note 1.

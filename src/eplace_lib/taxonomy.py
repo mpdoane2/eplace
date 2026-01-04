@@ -26,12 +26,15 @@ class TaxonomyExtractor:
     """
     
     
-    def __init__(self, rank: str = "genus"):
+    def __init__(self, rank: str = "genus", group_rank: str = "class"):
         """Initialize the TaxonomyExtractor."""
         VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
         if rank not in VALID_RANKS:
             raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
+        if group_rank not in VALID_RANKS:
+            raise ValueError(f"Group Rank: {group_rank} is not a valid rank. It must be one of: {VALID_RANKS}")
         self.rank = rank
+        self.group_rank = group_rank
     
     def parse_taxids(self, tax_ids: list[int]) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
         """
@@ -41,8 +44,9 @@ class TaxonomyExtractor:
             tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
-            the taxonomy information for that rank as dict mapping taxid to (rank_taxid, rank_name) and
-            the phylum information for the subject with a dict mapping the taxid to (phylum_taxid, phylum_name)
+            tuple containing:
+                - dict[str, tuple[str, str]]: mapping taxid to (rank_taxid, rank_name) for the specified rank
+                - dict[str, tuple[str, str]]: mapping taxid to (phylum_taxid, phylum_name)
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
@@ -52,7 +56,7 @@ class TaxonomyExtractor:
             df = pytaxonkit.lineage(tax_ids)
         except Exception as e:
             logger.error(f"Error retrieving taxonomic lineages: {e}")
-            return {}
+            return {}, {}
         df['names'] = df['FullLineage'].str.split(';')
         df['taxids'] = df['FullLineageTaxIDs'].str.split(';')
         df['ranks'] = df['FullLineageRanks'].str.split(';')
@@ -66,16 +70,16 @@ class TaxonomyExtractor:
                         )
         }
 
-        phylum_dict = {
+        groups_dict = {
                 str(tid): (str(taxid), str(name))
                 for tid, taxid, name in (
-                            long_df.loc[long_df['ranks'] == 'phylum', ['TaxID', 'taxids', 'names']]
+                            long_df.loc[long_df['ranks'] == self.group_rank, ['TaxID', 'taxids', 'names']]
                             .drop_duplicates()
                             .itertuples(index=False, name=None)
                         )
         }
 
-        return rank_dict, phylum_dict
+        return rank_dict, groups_dict
     
     def group_hits_by_query(
         self,
@@ -129,7 +133,7 @@ class TaxonomyExtractor:
                     reported_hits.add(hit.subject_rank_name)
                 # Add all hits with taxonomic information to rank_groups
                 rank_groups[hit.subject_rank_tid].append(hit)
-            else:
+            elif not hit.subject_rank_tid:
                 logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
         
         # Select best representative from each rank
@@ -344,7 +348,7 @@ def rewrite_blast_hits(
         "subject_start", "subject_end", "evalue", "bit_score",
         "query_coverage", "subject_taxid", "subject_taxids",
         "subject_rank_tid", "subject_rank_name",
-        "subject_phylum_tid", "subject_phylum_name",
+        "subject_group_tid", "subject_group_name",
     ]
 
     with open(output_file, 'w') as out:
@@ -366,7 +370,8 @@ def rewrite_blast_hits(
 def process_blast_results_for_taxonomy(
     blast_hits: List[BlastHit],
     output_dir: Path,
-    rank: str = "species",
+    rank: str = "genus",
+    group_rank: str = "class",
     database: str = "core_nt",
     blastdb_path: Optional[Path] = None
 ) -> Dict[str, Optional[Path]]:
@@ -387,13 +392,15 @@ def process_blast_results_for_taxonomy(
     VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     if rank not in VALID_RANKS:
         raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
+    if group_rank not in VALID_RANKS:
+        raise ValueError(f"Grouping Rank: {group_rank} is not a valid rank. It must be one of: {VALID_RANKS}")
     
-    tax_extractor = TaxonomyExtractor(rank)
+    tax_extractor = TaxonomyExtractor(rank, group_rank)
     seq_extractor = SequenceExtractor(blastdb_path)
     
     # get all the taxonomies
     subject_taxids = {hit.subject_taxid for hit in blast_hits}
-    taxonomies, phyla = tax_extractor.parse_taxids(list(subject_taxids))
+    taxonomies, groups = tax_extractor.parse_taxids(list(subject_taxids))
 
     # add all the ranks to all the hits
     for h in blast_hits:
@@ -404,13 +411,13 @@ def process_blast_results_for_taxonomy(
         else:
             h.subject_rank_tid = None
             h.subject_rank_name = None
-        phylum_info = phyla.get(h.subject_taxid)
-        if isinstance(phylum_info, (list, tuple)) and len(phylum_info) >= 2:
-            h.subject_phylum_tid = phylum_info[0]
-            h.subject_phylum_name = phylum_info[1]
+        group_info = groups.get(h.subject_taxid)
+        if isinstance(group_info, (list, tuple)) and len(group_info) >= 2:
+            h.subject_group_tid = group_info[0]
+            h.subject_group_name = group_info[1]
         else:
-            h.subject_phylum_tid = None
-            h.subject_phylum_name = None
+            h.subject_group_tid = None
+            h.subject_group_name = None
 
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)

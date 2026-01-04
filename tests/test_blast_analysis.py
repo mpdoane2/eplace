@@ -346,3 +346,91 @@ class TestRunBlastSearch:
             
             assert success is False
             assert len(hits) == 0
+
+
+class TestBlastHit:
+    """Test cases for BlastHit class."""
+    
+    def test_get_accession_gi_format(self):
+        """Test extracting accession from gi|...|gb|...| format."""
+        hit = BlastHit(
+            query_id="test",
+            subject_id="gi|2273658778|gb|MZ387488.1|",
+            percent_identity=100.0,
+            alignment_length=100,
+            query_length=100,
+            subject_length=100,
+            query_start=1,
+            query_end=100,
+            subject_start=1,
+            subject_end=100,
+            evalue=0.0,
+            bit_score=100,
+            query_coverage=100.0,
+            subject_taxid="12345",
+            subject_taxids="12345"
+        )
+        assert hit.get_accession() == "MZ387488.1"
+    
+    def test_get_accession_ref_format(self):
+        """Test extracting accession from ref|...| format."""
+        hit = BlastHit(
+            query_id="test",
+            subject_id="ref|NZ_CP123456.1|",
+            percent_identity=100.0,
+            alignment_length=100,
+            query_length=100,
+            subject_length=100,
+            query_start=1,
+            query_end=100,
+            subject_start=1,
+            subject_end=100,
+            evalue=0.0,
+            bit_score=100,
+            query_coverage=100.0,
+            subject_taxid="12345",
+            subject_taxids="12345"
+        )
+        assert hit.get_accession() == "NZ_CP123456.1"
+    
+    def test_get_accession_simple_format(self):
+        """Test accession when already in simple format."""
+        hit = BlastHit(
+            query_id="test",
+            subject_id="MZ387488.1",
+            percent_identity=100.0,
+            alignment_length=100,
+            query_length=100,
+            subject_length=100,
+            query_start=1,
+            query_end=100,
+            subject_start=1,
+            subject_end=100,
+            evalue=0.0,
+            bit_score=100,
+            query_coverage=100.0,
+            subject_taxid="12345",
+            subject_taxids="12345"
+        )
+        assert hit.get_accession() == "MZ387488.1"
+    
+    def test_get_accession_gnl_format(self):
+        """Test extracting identifier from gnl|database|identifier format."""
+        hit = BlastHit(
+            query_id="test",
+            subject_id="gnl|BL_ORD_ID|12345",
+            percent_identity=100.0,
+            alignment_length=100,
+            query_length=100,
+            subject_length=100,
+            query_start=1,
+            query_end=100,
+            subject_start=1,
+            subject_end=100,
+            evalue=0.0,
+            bit_score=100,
+            query_coverage=100.0,
+            subject_taxid="12345",
+            subject_taxids="12345"
+        )
+        assert hit.get_accession() == "12345"
