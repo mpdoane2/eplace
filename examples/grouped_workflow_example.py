@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Example script demonstrating the grouped ePLACE workflow for BLAST sequence comparison.
 
@@ -249,7 +250,7 @@ Notes:
         logger.error(f"Error extracting sequences: {e}")
         sys.exit(1)
 
-    logger.info("Rewriting the blast output file with the new annotations")
+    logger.info("Rewriting the BLAST output file with the new annotations")
     try:
         rewrite_blast_hits(
             blast_hits=filtered_hits,

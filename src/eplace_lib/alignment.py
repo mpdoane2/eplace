@@ -10,9 +10,10 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
+from collections import defaultdict
 
 from .blast_analysis import BlastHit, FastaReader
-from collections import defaultdict
+from .taxonomy import SequenceExtractor
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -642,8 +643,6 @@ def create_grouped_fasta_with_queries(
     Returns:
         True if successful, False otherwise
     """
-    from .taxonomy import SequenceExtractor
-    
     logger.info(f"Creating grouped FASTA for {group_name} ({group_tid})")
     
     # Read all query sequences
@@ -759,14 +758,15 @@ def trim_grouped_sequences(
                 hit_map[accession] = []
             hit_map[accession].append(hit)
         
-        # For sequences with multiple hits, use the one with the widest range
+        # For sequences with multiple hits, use the one with the best bit score
+        # This is consistent with the deduplication logic in create_grouped_fasta_with_queries
         best_hits = {}
         for accession, hits in hit_map.items():
             if len(hits) == 1:
                 best_hits[accession] = hits[0]
             else:
-                # Use the hit with the longest alignment
-                best_hits[accession] = max(hits, key=lambda h: abs(h.subject_end - h.subject_start))
+                # Use the hit with the best bit score for consistency
+                best_hits[accession] = max(hits, key=lambda h: h.bit_score)
         
         # Open output file
         with open(output_fasta, 'w') as out:
