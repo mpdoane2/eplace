@@ -281,7 +281,7 @@ class TestIQTreeBuilder:
         available, cmd = IQTreeBuilder.check_iqtree_available()
         assert isinstance(available, bool)
         if available:
-            assert cmd in ['iqtree', 'iqtree2']
+            assert cmd in ['iqtree', 'iqtree2', 'iqtree3']
         else:
             assert cmd is None
     
