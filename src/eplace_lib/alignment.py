@@ -271,7 +271,6 @@ class IQTreeBuilder:
     def build_tree(
         alignment_fasta: Path,
         output_prefix: Path,
-        num_threads: int = 1,
         model: str = "MFP"
     ) -> bool:
         """
@@ -280,7 +279,6 @@ class IQTreeBuilder:
         Args:
             alignment_fasta: Path to aligned FASTA file
             output_prefix: Prefix for output files
-            num_threads: Number of threads to use
             model: Substitution model (default: "MFP" for automatic ModelFinder Plus selection)
             
         Returns:
@@ -301,7 +299,7 @@ class IQTreeBuilder:
             '-s', str(alignment_fasta),
             '-pre', str(output_prefix),
             '-m', model,
-            '-T', str(num_threads)
+            '-T', "AUTO"
         ]
         
         logger.info(f"Running IQTree: {' '.join(cmd)}")
