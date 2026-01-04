@@ -10,7 +10,6 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
-from dataclasses import dataclass
 
 from .blast_analysis import BlastHit, FastaReader
 
@@ -164,7 +163,7 @@ class MAFFTAligner:
                 timeout=5
             )
             if result.returncode == 0:
-                logging.info(f"Using mafft to build the alignment ({result.stdout})")
+                logger.info(f"Using mafft to build the alignment ({result.stdout})")
             return result.returncode == 0
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
@@ -259,7 +258,7 @@ class IQTreeBuilder:
                     timeout=5
                 )
                 if result.returncode == 0:
-                    logging.info(f"Using {cmd} to build the trees ({result.stdout})")
+                    logger.info(f"Using {cmd} to build the trees ({result.stdout})")
                     return True, cmd
             except (subprocess.SubprocessError, FileNotFoundError):
                 continue
