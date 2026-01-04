@@ -134,7 +134,29 @@ python examples/blast_workflow_example.py --help
 See the `examples/` directory for comprehensive examples:
 
 - `download_ncbi_example.py` - Download and manage NCBI databases
-- `blast_workflow_example.py` - Complete BLAST workflow with command-line interface
+- `blast_workflow_example.py` - Complete BLAST workflow with per-query analysis and trees
+- `grouped_workflow_example.py` - Grouped workflow that combines queries by taxonomic rank
+
+### Grouped Workflow
+
+The grouped workflow (`grouped_workflow_example.py`) differs from the standard workflow by:
+- Grouping all queries that match to the same taxonomic rank (e.g., class, order)
+- Creating one FASTA file per group containing all queries and unique reference sequences
+- Removing redundant reference sequences within each group
+- Building one alignment and phylogenetic tree per group (instead of per query)
+
+This is useful when you want to analyze multiple related queries together in a single phylogenetic context.
+
+```bash
+# Group queries by class (default)
+python examples/grouped_workflow_example.py query.fasta output_dir
+
+# Group by a different taxonomic rank
+python examples/grouped_workflow_example.py query.fasta output_dir --group-rank order
+
+# Specify both representative rank and grouping rank
+python examples/grouped_workflow_example.py query.fasta output_dir --rank genus --group-rank family
+```
 
 ## Testing
 
@@ -190,7 +212,19 @@ eplace/
 8. **Build Tree**: Build phylogenetic tree using IQTree with taxonomic labels (optional)
 9. **Output**: Get FASTA files, alignments, and trees (one set per query)
 
+### Grouped Workflow Overview
+
+The grouped workflow adds an additional step:
+1-5. Same as standard workflow through representative extraction
+6. **Group by Rank**: Group all queries by specified taxonomic rank (e.g., class)
+7. **Create Grouped FASTA**: Combine all queries and unique references for each group
+8. **Trim Sequences**: Trim references to aligned regions
+9. **Check Consistency**: Verify BLAST hits align to similar locations on references
+10. **Align and Build Trees**: Create one alignment and tree per taxonomic group
+
 ## Output Structure
+
+### Standard Workflow Output
 
 ```
 output_dir/
@@ -206,6 +240,28 @@ output_dir/
 │   └── query1_id_tree.* (other IQTree files)
 ├── query2_id/
 │   └── query2_id_representatives.fasta
+└── ...
+```
+
+### Grouped Workflow Output
+
+```
+output_dir/
+├── blast_results.txt              # Raw BLAST results
+├── blast_results_annotated.txt    # BLAST results with taxonomic annotations
+├── query1_id/                     # Per-query representative sequences (from step 5)
+│   └── query1_id_representatives.fasta
+├── query2_id/
+│   └── query2_id_representatives.fasta
+├── Taxonomic_Group_1/             # One directory per taxonomic group
+│   ├── Taxonomic_Group_1_combined.fasta        # All queries + unique references
+│   ├── Taxonomic_Group_1_trimmed.fasta         # Trimmed to aligned regions
+│   ├── Taxonomic_Group_1_aligned.fasta         # Multiple sequence alignment
+│   ├── Taxonomic_Group_1_tree.treefile         # Phylogenetic tree
+│   ├── Taxonomic_Group_1_tree_labeled.treefile # Tree with taxonomic labels
+│   └── Taxonomic_Group_1_tree.* (other IQTree files)
+├── Taxonomic_Group_2/
+│   └── ...
 └── ...
 ```
 
