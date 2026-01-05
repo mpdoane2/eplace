@@ -978,6 +978,17 @@ class TestGenerateClassificationSummary:
             'species': ('9597', 'Pan paniscus')
         }
     
+    def _get_column_indices(self, header: list) -> dict:
+        """Helper method to get column indices from header row."""
+        return {
+            'query_id': header.index('query_id'),
+            'classification_name': header.index('classification_name'),
+            'group_name': header.index('group_name'),
+            'tree_label_name': header.index('tree_label_name'),
+            'appears_in_multiple_groups': header.index('appears_in_multiple_groups'),
+            'has_classification': header.index('has_classification')
+        }
+    
     def test_generate_classification_summary_basic(self):
         """Test generating basic classification summary."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1048,29 +1059,24 @@ class TestGenerateClassificationSummary:
             assert 'appears_in_multiple_groups' in header
             assert 'has_classification' in header
             
-            # Get column indices dynamically
-            query_id_idx = header.index('query_id')
-            classification_name_idx = header.index('classification_name')
-            group_name_idx = header.index('group_name')
-            tree_label_name_idx = header.index('tree_label_name')
-            appears_in_multiple_groups_idx = header.index('appears_in_multiple_groups')
-            has_classification_idx = header.index('has_classification')
+            # Get column indices using helper method
+            col_idx = self._get_column_indices(header)
             
             # Check seq1 data
             data1 = lines[1].strip().split('\t')
-            assert data1[query_id_idx] == 'seq1'
-            assert 'Salmonella' in data1[classification_name_idx]
-            assert 'Gammaproteobacteria' in data1[group_name_idx]
-            assert 'Enterobacteriaceae' in data1[tree_label_name_idx]
-            assert data1[appears_in_multiple_groups_idx] == 'No'
-            assert data1[has_classification_idx] == 'Yes'
+            assert data1[col_idx['query_id']] == 'seq1'
+            assert 'Salmonella' in data1[col_idx['classification_name']]
+            assert 'Gammaproteobacteria' in data1[col_idx['group_name']]
+            assert 'Enterobacteriaceae' in data1[col_idx['tree_label_name']]
+            assert data1[col_idx['appears_in_multiple_groups']] == 'No'
+            assert data1[col_idx['has_classification']] == 'Yes'
             
             # Check seq2 data
             data2 = lines[2].strip().split('\t')
-            assert data2[query_id_idx] == 'seq2'
-            assert 'Homo' in data2[classification_name_idx]
-            assert 'Mammalia' in data2[group_name_idx]
-            assert 'Hominidae' in data2[tree_label_name_idx]
+            assert data2[col_idx['query_id']] == 'seq2'
+            assert 'Homo' in data2[col_idx['classification_name']]
+            assert 'Mammalia' in data2[col_idx['group_name']]
+            assert 'Hominidae' in data2[col_idx['tree_label_name']]
     
     def test_generate_classification_summary_multiple_groups(self):
         """Test detecting sequences appearing in multiple groups."""
@@ -1133,17 +1139,15 @@ class TestGenerateClassificationSummary:
             # Should have header + 1 data line
             assert len(lines) == 2
             
-            # Check data using header indices
+            # Check data using helper method for column indices
             header = lines[0].strip().split('\t')
-            query_id_idx = header.index('query_id')
-            group_name_idx = header.index('group_name')
-            appears_in_multiple_groups_idx = header.index('appears_in_multiple_groups')
+            col_idx = self._get_column_indices(header)
             
             data = lines[1].strip().split('\t')
-            assert data[query_id_idx] == 'seq1'
-            assert data[appears_in_multiple_groups_idx] == 'Yes'
+            assert data[col_idx['query_id']] == 'seq1'
+            assert data[col_idx['appears_in_multiple_groups']] == 'Yes'
             # Group name should be semicolon-separated and sorted
-            group_names = data[group_name_idx].split('; ')
+            group_names = data[col_idx['group_name']].split('; ')
             assert len(group_names) == 2
             assert 'Gammaproteobacteria' in group_names
             assert 'Mammalia' in group_names

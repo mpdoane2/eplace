@@ -20,6 +20,9 @@ import pytaxonkit
 # Configure module logger
 logger = logging.getLogger(__name__)
 
+# Valid taxonomic ranks supported by the library
+VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+
 
 class TaxonomyExtractor:
     """
@@ -38,7 +41,6 @@ class TaxonomyExtractor:
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
-        VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
         taxonomy_dict = {}
 
         # we need to get the whole lineage, and then convert it to a dict
@@ -385,7 +387,6 @@ def process_blast_results_for_taxonomy(
         dictionary mapping query IDs to output FASTA file paths
     """
     
-    VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     if rank not in VALID_RANKS:
         raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
 
@@ -476,7 +477,6 @@ def generate_classification_summary(
     logger.info(f"Generating classification summary TSV to {output_file}")
     
     # Validate ranks
-    VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     for r, r_name in [(rank, 'rank'), (group_rank, 'group_rank'), (tree_label_rank, 'tree_label_rank')]:
         if r not in VALID_RANKS:
             logger.error(f"{r_name}: {r} is not a valid rank. It must be one of: {VALID_RANKS}")
@@ -522,6 +522,12 @@ def generate_classification_summary(
         best_hit = max(query_hits, key=lambda h: h.bit_score)
         
         # Track which ranks have valid taxonomy information
+        # We check three ranks: rank, group_rank, and tree_label_rank
+        ranks_to_check = [
+            (rank, 'classification'),
+            (group_rank, 'group'),
+            (tree_label_rank, 'tree_label')
+        ]
         missing_ranks = []
         
         # Extract closest organism at classification rank
@@ -549,8 +555,9 @@ def generate_classification_summary(
             missing_ranks.append(tree_label_rank)
         
         # Set classification status based on missing ranks
+        total_ranks = len(ranks_to_check)
         if missing_ranks:
-            if len(missing_ranks) == 3:
+            if len(missing_ranks) == total_ranks:
                 classification['has_classification'] = 'No'
             else:
                 classification['has_classification'] = 'Partial'
