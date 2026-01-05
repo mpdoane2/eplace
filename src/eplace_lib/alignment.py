@@ -609,15 +609,9 @@ def group_hits_by_group_rank(
             )
     
     logger.info(f"Grouped hits into {len(grouped)} taxonomic groups")
-    for group_tid, queries in grouped.items():
-        # Get group name from first hit
-        group_name = None
-        for query_hits in queries.values():
-            if query_hits:
-                group_name = query_hits[0].subject_taxonomy[group_rank][1]
-                break
+    for group_name, queries in grouped.items():
         logger.info(
-            f"  Group {group_name} ({group_tid}): {len(queries)} queries, "
+            f"  Group {group_name}: {len(queries)} queries, "
             f"{sum(len(hits) for hits in queries.values())} total hits"
         )
     
