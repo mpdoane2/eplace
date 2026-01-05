@@ -1039,7 +1039,7 @@ class TestGenerateClassificationSummary:
             # Should have header + 2 data lines
             assert len(lines) == 3
             
-            # Check header
+            # Check header and get column indices
             header = lines[0].strip().split('\t')
             assert 'query_id' in header
             assert 'classification_name' in header
@@ -1048,21 +1048,29 @@ class TestGenerateClassificationSummary:
             assert 'appears_in_multiple_groups' in header
             assert 'has_classification' in header
             
+            # Get column indices dynamically
+            query_id_idx = header.index('query_id')
+            classification_name_idx = header.index('classification_name')
+            group_name_idx = header.index('group_name')
+            tree_label_name_idx = header.index('tree_label_name')
+            appears_in_multiple_groups_idx = header.index('appears_in_multiple_groups')
+            has_classification_idx = header.index('has_classification')
+            
             # Check seq1 data
             data1 = lines[1].strip().split('\t')
-            assert data1[0] == 'seq1'
-            assert 'Salmonella' in data1[3]  # classification_name
-            assert 'Gammaproteobacteria' in data1[6]  # group_name
-            assert 'Enterobacteriaceae' in data1[9]  # tree_label_name
-            assert data1[10] == 'No'  # appears_in_multiple_groups
-            assert data1[11] == 'Yes'  # has_classification
+            assert data1[query_id_idx] == 'seq1'
+            assert 'Salmonella' in data1[classification_name_idx]
+            assert 'Gammaproteobacteria' in data1[group_name_idx]
+            assert 'Enterobacteriaceae' in data1[tree_label_name_idx]
+            assert data1[appears_in_multiple_groups_idx] == 'No'
+            assert data1[has_classification_idx] == 'Yes'
             
             # Check seq2 data
             data2 = lines[2].strip().split('\t')
-            assert data2[0] == 'seq2'
-            assert 'Homo' in data2[3]  # classification_name
-            assert 'Mammalia' in data2[6]  # group_name
-            assert 'Hominidae' in data2[9]  # tree_label_name
+            assert data2[query_id_idx] == 'seq2'
+            assert 'Homo' in data2[classification_name_idx]
+            assert 'Mammalia' in data2[group_name_idx]
+            assert 'Hominidae' in data2[tree_label_name_idx]
     
     def test_generate_classification_summary_multiple_groups(self):
         """Test detecting sequences appearing in multiple groups."""
@@ -1125,12 +1133,22 @@ class TestGenerateClassificationSummary:
             # Should have header + 1 data line
             assert len(lines) == 2
             
-            # Check data
+            # Check data using header indices
+            header = lines[0].strip().split('\t')
+            query_id_idx = header.index('query_id')
+            group_name_idx = header.index('group_name')
+            appears_in_multiple_groups_idx = header.index('appears_in_multiple_groups')
+            
             data = lines[1].strip().split('\t')
-            assert data[0] == 'seq1'
-            assert data[10] == 'Yes'  # appears_in_multiple_groups
-            # Group name should contain both classes
-            assert 'Gammaproteobacteria' in data[6] and 'Mammalia' in data[6]
+            assert data[query_id_idx] == 'seq1'
+            assert data[appears_in_multiple_groups_idx] == 'Yes'
+            # Group name should be semicolon-separated and sorted
+            group_names = data[group_name_idx].split('; ')
+            assert len(group_names) == 2
+            assert 'Gammaproteobacteria' in group_names
+            assert 'Mammalia' in group_names
+            # Verify they are sorted
+            assert group_names == sorted(group_names)
     
     def test_generate_classification_summary_no_classification(self):
         """Test handling sequences with no hits."""

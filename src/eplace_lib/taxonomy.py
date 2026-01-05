@@ -547,19 +547,15 @@ def generate_classification_summary(
             if classification['has_classification'] == 'Yes':
                 classification['has_classification'] = 'Partial'
         
-        # Check if sequence appears in multiple groups
-        if group_rank in [rank, tree_label_rank] or all(
-            hit.subject_taxonomy and group_rank in hit.subject_taxonomy 
-            for hit in query_hits
-        ):
-            group_names = set()
-            for hit in query_hits:
-                if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
-                    group_names.add(hit.subject_taxonomy[group_rank][1])
-            
-            if len(group_names) > 1:
-                classification['appears_in_multiple_groups'] = 'Yes'
-                classification['group_name'] = '; '.join(sorted(group_names))
+        # Check if sequence appears in multiple groups at the group_rank level
+        group_names = set()
+        for hit in query_hits:
+            if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
+                group_names.add(hit.subject_taxonomy[group_rank][1])
+        
+        if len(group_names) > 1:
+            classification['appears_in_multiple_groups'] = 'Yes'
+            classification['group_name'] = '; '.join(sorted(group_names))
         
         summary_data.append(classification)
     
