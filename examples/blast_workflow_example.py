@@ -220,7 +220,6 @@ Notes:
             blast_hits=filtered_hits,
             output_dir=args.output_dir,
             rank=args.rank,
-            group_rank=args.group_rank,
             database=args.database,
             blastdb_path=args.blastdb_path
         )
