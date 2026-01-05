@@ -115,6 +115,10 @@ class TaxonomyExtractor:
             if not hit.subject_taxonomy:
                 logger.info(f"Skipping the taxonomy for {hit.query_id} as no subject taxonomy")
                 continue
+            if rank not in hit.subject_taxonomy:
+                logger.info(
+                    f"We did not find {rank} in the taxonomy of {hit.query_id} which has subject taxid of {hit.subject_taxid}")
+                continue
             if not hit.subject_taxonomy[rank]:
                 logger.warning(
                     f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {rank}")
