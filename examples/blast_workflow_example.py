@@ -137,7 +137,7 @@ Notes:
     
     # Validate input file
     if not args.query_fasta.exists():
-        logger.exception(f"Query FASTA file not found: {args.query_fasta}")
+        logger.error(f"Query FASTA file not found: {args.query_fasta}")
         sys.exit(1)
     
     # Create output directory
