@@ -521,13 +521,16 @@ def generate_classification_summary(
         # Find the best hit (highest bit score) for each rank
         best_hit = max(query_hits, key=lambda h: h.bit_score)
         
+        # Track which ranks have valid taxonomy information
+        missing_ranks = []
+        
         # Extract closest organism at classification rank
         if best_hit.subject_taxonomy and rank in best_hit.subject_taxonomy:
             taxid, name = best_hit.subject_taxonomy[rank]
             classification['classification_taxid'] = taxid
             classification['classification_name'] = name
         else:
-            classification['has_classification'] = 'No'
+            missing_ranks.append(rank)
         
         # Extract closest organism at group rank
         if best_hit.subject_taxonomy and group_rank in best_hit.subject_taxonomy:
@@ -535,8 +538,7 @@ def generate_classification_summary(
             classification['group_taxid'] = taxid
             classification['group_name'] = name
         else:
-            if classification['has_classification'] == 'Yes':
-                classification['has_classification'] = 'Partial'
+            missing_ranks.append(group_rank)
         
         # Extract closest organism at tree label rank
         if best_hit.subject_taxonomy and tree_label_rank in best_hit.subject_taxonomy:
@@ -544,7 +546,13 @@ def generate_classification_summary(
             classification['tree_label_taxid'] = taxid
             classification['tree_label_name'] = name
         else:
-            if classification['has_classification'] == 'Yes':
+            missing_ranks.append(tree_label_rank)
+        
+        # Set classification status based on missing ranks
+        if missing_ranks:
+            if len(missing_ranks) == 3:
+                classification['has_classification'] = 'No'
+            else:
                 classification['has_classification'] = 'Partial'
         
         # Check if sequence appears in multiple groups at the group_rank level
