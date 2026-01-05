@@ -673,6 +673,12 @@ def create_grouped_fasta_with_queries(
             else:
                 # Keep the hit with better bit score
                 if hit.bit_score > unique_labels[label].bit_score:
+                    # Remove the old reference for this label, if present
+                    old_hit = unique_labels[label]
+                    old_subject_id = old_hit.subject_id
+                    if old_subject_id in unique_references:
+                        del unique_references[old_subject_id]
+                    # Add the new, better-scoring hit
                     unique_references[hit.subject_id] = hit
                     unique_labels[label] = hit
 
