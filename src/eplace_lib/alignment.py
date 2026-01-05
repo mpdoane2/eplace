@@ -677,7 +677,12 @@ def create_grouped_fasta_with_queries(
                     unique_labels[label] = hit
 
     logger.info(f"Found {len(unique_references)} unique reference sequences")
-    logger.info(f"Our unique labels are {unique_labels}")
+    unique_label_keys = list(unique_labels.keys())
+    logger.info(
+        "Unique labels: count=%d, example_labels=%s",
+        len(unique_labels),
+        unique_label_keys[:10],
+    )
     
     # Extract reference sequences
     seq_extractor = SequenceExtractor(blastdb_path)
