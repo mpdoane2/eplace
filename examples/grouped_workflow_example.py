@@ -285,7 +285,7 @@ Notes:
     grouped_hits = group_hits_by_group_rank(filtered_hits, args.group_rank)
     
     if not grouped_hits:
-        logger.exception("No groups found after grouping by rank")
+        logger.error("No groups found after grouping by rank")
         sys.exit(1)
 
     # Step 6: Create grouped FASTA files
