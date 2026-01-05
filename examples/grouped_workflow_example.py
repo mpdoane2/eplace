@@ -260,7 +260,7 @@ Notes:
             output_file=args.output_dir / "blast_results_annotated.txt",
             header=True
         )
-    except Exception:
+    except Exception as e:
         logger.exception(f"Error rewriting the blast hits: {e}")
         sys.exit(1)
 
