@@ -1,5 +1,11 @@
 """
 Tests for taxonomy extraction functionality.
+
+Note: in this test suite we have "taxonomy IDs" at various locations. These are completely fictional and tend to be
+1495400 or so. They are designed so that if the suite has an error it is much easier to locate where the error is
+rather than using real IDs.
+
+Also note that the mock return methods taxonomy IDs _must_ match the fake taxonomy IDs we used in the Blast Hits.
 """
 
 import tempfile
@@ -20,7 +26,30 @@ class TestTaxonomyExtractor:
     """Test cases for TaxonomyExtractor class."""
     
     def setup_method(self):
-        self.taxonomy_extractor = TaxonomyExtractor("genus")
+        self.taxonomy_extractor = TaxonomyExtractor()
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
         self.hits = [
             BlastHit(
                 query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
@@ -35,10 +64,9 @@ class TestTaxonomyExtractor:
                 evalue=0.0,
                 bit_score=998,
                 query_coverage=100,
-                subject_taxid="149539",
-                subject_taxids="149539",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy = self.salmonella_taxonomy
             ),
             BlastHit(
                 query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
@@ -54,9 +82,8 @@ class TestTaxonomyExtractor:
                 bit_score=776,
                 query_coverage=100,
                 subject_taxid="9606",
-                subject_taxids="9606",
-                subject_rank_tid="9605",
-                subject_rank_name="Homo"
+                subject_taxids="9606;9605",
+                subject_taxonomy = self.human_taxonomy
             ),
             BlastHit(
                 query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
@@ -72,25 +99,16 @@ class TestTaxonomyExtractor:
                 bit_score=156,
                 query_coverage=27.3809523809524,
                 subject_taxid="9597",
-                subject_taxids="9597",
-                subject_rank_tid="9596",
-                subject_rank_name="Pan"
+                subject_taxids="9597;9596;9604",
+                subject_taxonomy=self.pan_taxonomy
             )
         ]
 
     def test_parse_taxids(self):
-        tax_info, group_info, genus_info = self.taxonomy_extractor.parse_taxids([9606, 590])
+        tax_info = self.taxonomy_extractor.parse_taxids([9606, 590])
 
-        homo_genus = ('9605', 'Homo')
-        salm_genus = ('590', 'Salmonella')
-        homo_class = ('40674', 'Mammalia')
-        salm_class = ('1236', 'Gammaproteobacteria')
-        assert tax_info["9606"] == homo_genus
-        assert tax_info["590"] == salm_genus
-        assert group_info['9606'] == homo_class 
-        assert group_info['590'] == salm_class
-        assert genus_info['9606'] == homo_genus
-        assert genus_info['590'] == salm_genus
+        assert tax_info["9606"] == self.human_taxonomy
+        assert tax_info["590"] == self.salmonella_taxonomy
     
     def test_group_hits_by_query(self):
         """Test grouping BLAST hits by query."""
@@ -109,7 +127,8 @@ class TestTaxonomyExtractor:
         
         extractor = self.taxonomy_extractor
         representatives = extractor.select_representatives_by_rank(
-            hits=hits
+            hits=hits,
+            rank='genus'
         )
         
         # Should return at least one representative
@@ -122,6 +141,7 @@ class TestTaxonomyExtractor:
         extractor = self.taxonomy_extractor
         representatives = extractor.select_representatives_by_rank(
             hits=[],
+            rank='genus'
         )
         
         assert len(representatives) == 0
@@ -145,10 +165,9 @@ class TestTaxonomyExtractor:
                 evalue=0.0,
                 bit_score=900,
                 query_coverage=100,
-                subject_taxid="12345",
-                subject_taxids="12345",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy=self.salmonella_taxonomy
             ),
             BlastHit(
                 query_id='query1', subject_id='subject2',
@@ -163,16 +182,16 @@ class TestTaxonomyExtractor:
                 evalue=0.0,
                 bit_score=950,  # Higher score - should be selected
                 query_coverage=100,
-                subject_taxid="12346",
-                subject_taxids="12346",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy=self.salmonella_taxonomy
             ),
         ]
         
         # Select representatives for first query (no preferred yet)
         reps1 = extractor.select_representatives_by_rank(
-            hits=first_query_hits
+            hits=first_query_hits,
+            rank='genus'
         )
         
         # Should select subject2 (higher bit score)
@@ -180,7 +199,7 @@ class TestTaxonomyExtractor:
         assert reps1[0].subject_id == 'subject2'
         
         # Build preferred representatives dict
-        preferred = {reps1[0].subject_rank_tid: reps1[0].subject_id}
+        preferred = {reps1[0].subject_taxonomy['genus'][1]: reps1[0].subject_id}
         
         # Second query with same genus but different scores
         second_query_hits = [
@@ -197,10 +216,9 @@ class TestTaxonomyExtractor:
                 evalue=0.0,
                 bit_score=850,
                 query_coverage=100,
-                subject_taxid="12345",
-                subject_taxids="12345",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy=self.salmonella_taxonomy
             ),
             BlastHit(
                 query_id='query2', subject_id='subject2',
@@ -215,16 +233,16 @@ class TestTaxonomyExtractor:
                 evalue=0.0,
                 bit_score=800,  # Lower score than subject1
                 query_coverage=100,
-                subject_taxid="12346",
-                subject_taxids="12346",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy=self.salmonella_taxonomy
             ),
         ]
         
         # Select representatives for second query with preferred
         reps2 = extractor.select_representatives_by_rank(
             hits=second_query_hits,
+            rank='genus',
             preferred_representatives=preferred
         )
         
@@ -238,6 +256,29 @@ class TestSequenceExtractor:
     """Test cases for SequenceExtractor class."""
     
     def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
         self.hits = [
             BlastHit(
                 query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
@@ -252,10 +293,9 @@ class TestSequenceExtractor:
                 evalue=0.0,
                 bit_score=998,
                 query_coverage=100,
-                subject_taxid="149539",
-                subject_taxids="149539",
-                subject_rank_tid="590",
-                subject_rank_name="Salmonella"
+                subject_taxid="590",
+                subject_taxids="590",
+                subject_taxonomy=self.salmonella_taxonomy
             ),
             BlastHit(
                 query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
@@ -271,9 +311,8 @@ class TestSequenceExtractor:
                 bit_score=776,
                 query_coverage=100,
                 subject_taxid="9606",
-                subject_taxids="9606",
-                subject_rank_tid="9605",
-                subject_rank_name="Homo"
+                subject_taxids="9606;9605",
+                subject_taxonomy=self.human_taxonomy
             ),
             BlastHit(
                 query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
@@ -289,9 +328,8 @@ class TestSequenceExtractor:
                 bit_score=156,
                 query_coverage=27.3809523809524,
                 subject_taxid="9597",
-                subject_taxids="9597",
-                subject_rank_tid="9596",
-                subject_rank_name="Pan"
+                subject_taxids="9597;9596;9604",
+                subject_taxonomy=self.pan_taxonomy
             )
         ]
 
@@ -420,7 +458,32 @@ class TestSequenceExtractor:
 
 class TestProcessBlastResultsForTaxonomy:
     """Test cases for process_blast_results_for_taxonomy function."""
-    
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
+
     @patch('eplace_lib.taxonomy.TaxonomyExtractor.parse_taxids')
     @patch('eplace_lib.taxonomy.SequenceExtractor.extract_representatives_for_query')
     def test_process_blast_results_for_taxonomy(self, mock_extract, mock_parse_taxids):
@@ -442,10 +505,9 @@ class TestProcessBlastResultsForTaxonomy:
                     evalue=0.0,
                     bit_score=998,
                     query_coverage=100,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="1495401",
+                    subject_taxids="1495402",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
@@ -460,10 +522,9 @@ class TestProcessBlastResultsForTaxonomy:
                     evalue=0.0,
                     bit_score=776,
                     query_coverage=100,
-                    subject_taxid="9606",
-                    subject_taxids="9606",
-                    subject_rank_tid="9605",
-                    subject_rank_name="Homo"
+                    subject_taxid="1495403",
+                    subject_taxids="1495405;1495404",
+                    subject_taxonomy=self.human_taxonomy
                 ),
                 BlastHit(
                     query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
@@ -478,26 +539,18 @@ class TestProcessBlastResultsForTaxonomy:
                     evalue=3.56e-33,
                     bit_score=156,
                     query_coverage=27.3809523809524,
-                    subject_taxid="9597",
-                    subject_taxids="9597",
-                    subject_rank_tid="9596",
-                    subject_rank_name="Pan"
+                    subject_taxid="1495406",
+                    subject_taxids="1495407;1495408;1495409",
+                    subject_taxonomy=self.pan_taxonomy
                 )
             ]
             
             # Mock parse_taxids to return taxonomy and phylum info
-            mock_parse_taxids.return_value = (
-                {
-                    "149539": ("590", "Salmonella"),
-                    "9606": ("9605", "Homo"),
-                    "9597": ("9596", "Pan")
-                },
-                {
-                    "149539": ("1224", "Pseudomonadota"),
-                    "9606": ("7711", "Chordata"),
-                    "9597": ("7711", "Chordata")
-                }
-            )
+            mock_parse_taxids.return_value = {
+                    "1495401":self.salmonella_taxonomy,
+                    "1495403": self.human_taxonomy,
+                    "1495406": self.pan_taxonomy
+            }
             
             mock_extract.return_value = tmppath / "output.fasta"
             
@@ -512,31 +565,42 @@ class TestProcessBlastResultsForTaxonomy:
             assert 'seq2' in results
             
             # Verify phylum information is correctly set on blast hits
-            # seq1 has taxid 149539 (Salmonella) which should map to Pseudomonadota phylum
-            assert hits[0].subject_group_tid == '1224'
-            assert hits[0].subject_group_name == 'Pseudomonadota'
+            # seq1 has taxid 1495401 (Salmonella) which should map to Pseudomonadota phylum
+            assert hits[0].subject_taxonomy == self.salmonella_taxonomy
             
             # seq2 has taxid 9606 (Homo sapiens) which should map to Chordata phylum
-            assert hits[1].subject_group_tid == '7711'
-            assert hits[1].subject_group_name == 'Chordata'
+            assert hits[1].subject_taxonomy == self.human_taxonomy
             
             # seq3 has taxid 9597 (Pan) which should also map to Chordata phylum
-            assert hits[2].subject_group_tid == '7711'
-            assert hits[2].subject_group_name == 'Chordata'
+            assert hits[2].subject_taxonomy == self.pan_taxonomy
 
 class TestRewriteBlastHits:
     """Test cases for rewrite_blast_hits function."""
     
-    # Expected field names for blast hit output
-    EXPECTED_FIELDS = [
-        "query_id", "subject_id", "percent_identity", "alignment_length",
-        "query_length", "subject_length", "query_start", "query_end",
-        "subject_start", "subject_end", "evalue", "bit_score",
-        "query_coverage", "subject_taxid", "subject_taxids",
-        "subject_rank_tid", "subject_rank_name",
-        "subject_group_tid", "subject_group_name"
-    ]
-    
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.expected_fields = [
+            "query_id", "subject_id", "percent_identity", "alignment_length",
+            "query_length", "subject_length", "query_start", "query_end",
+            "subject_start", "subject_end", "evalue", "bit_score",
+            "query_coverage", "subject_taxid", "subject_taxids",
+            "subject_taxonomy"
+        ]
+
     def test_rewrite_blast_hits_with_complete_annotations(self):
         """Test writing blast hits with all fields populated."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -560,10 +624,7 @@ class TestRewriteBlastHits:
                     query_coverage=100.0,
                     subject_taxid="149539",
                     subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella",
-                    subject_group_tid="1224",
-                    subject_group_name="Pseudomonadota"
+                    subject_taxonomy=self.salmonella_taxonomy
                 )
             ]
             
@@ -580,16 +641,13 @@ class TestRewriteBlastHits:
             
             # Check header
             header = lines[0].strip().split('\t')
-            assert header == self.EXPECTED_FIELDS
+            assert header == self.expected_fields
             
             # Check data line
             data = lines[1].strip().split('\t')
             assert data[0] == "seq1"
             assert data[1] == "gi|156763568|gb|EU014687.1|"
-            assert data[15] == "590"
-            assert data[16] == "Salmonella"
-            assert data[17] == "1224"
-            assert data[18] == "Pseudomonadota"
+            assert data[15] == str(self.salmonella_taxonomy)
     
     def test_rewrite_blast_hits_with_none_values(self):
         """Test writing blast hits with None values in optional fields."""
@@ -614,10 +672,7 @@ class TestRewriteBlastHits:
                     query_coverage=100.0,
                     subject_taxid="149539",
                     subject_taxids="149539",
-                    subject_rank_tid=None,
-                    subject_rank_name=None,
-                    subject_group_tid=None,
-                    subject_group_name=None
+                    subject_taxonomy=None
                 )
             ]
             
@@ -635,12 +690,9 @@ class TestRewriteBlastHits:
             # Check data line - None values should be empty strings
             # Remove only newline to preserve tab-delimited format
             data = lines[1].rstrip('\n').split('\t')
-            assert len(data) == 19  # Verify all fields present
+            assert len(data) == 16  # Verify all fields present
             assert data[0] == "seq1"
-            assert data[15] == ""  # subject_rank_tid
-            assert data[16] == ""  # subject_rank_name
-            assert data[17] == ""  # subject_group_tid
-            assert data[18] == ""  # subject_group_name
+            assert data[15] == ""  # subject_taxonomy
     
     def test_rewrite_blast_hits_without_header(self):
         """Test writing blast hits without header."""
@@ -665,10 +717,7 @@ class TestRewriteBlastHits:
                     query_coverage=100.0,
                     subject_taxid="149539",
                     subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella",
-                    subject_group_tid="1224",
-                    subject_group_name="Pseudomonadota"
+                    subject_taxonomy=self.salmonella_taxonomy
                 )
             ]
             
@@ -693,18 +742,15 @@ class TestRewriteBlastHits:
     @patch('eplace_lib.taxonomy.TaxonomyExtractor.parse_taxids')
     def test_process_blast_results_reuses_representatives(self, mock_parse_taxids, mock_extract):
         """Test that the same representative sequence is used across multiple queries."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with (tempfile.TemporaryDirectory() as tmpdir):
             tmppath = Path(tmpdir)
             
             # Mock the taxonomy parsing to return taxonomy info
             # Map taxid to (rank_tid, rank_name) for genus level
-            mock_parse_taxids.return_value = (
-                {
-                    "149539": ("590", "Salmonella"),
-                    "149540": ("590", "Salmonella")
-                },
-                {}  # Empty phylum dict for this test
-            )
+            mock_parse_taxids.return_value = {
+                    "1495501": self.salmonella_taxonomy,
+                    "1495502": self.human_taxonomy
+            }
             
             # Create hits where two queries match the same genus (Salmonella)
             hits = [
@@ -722,32 +768,13 @@ class TestRewriteBlastHits:
                     evalue=0.0,
                     bit_score=900,
                     query_coverage=100,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
-                ),
-                BlastHit(
-                    query_id='query1', subject_id='subject_b',
-                    percent_identity=98.0, 
-                    alignment_length=500,
-                    query_length=500,
-                    subject_length=1000,
-                    query_start=1, 
-                    query_end=500,
-                    subject_start=1,
-                    subject_end=500,
-                    evalue=0.0,
-                    bit_score=950,  # Highest score - should be selected first
-                    query_coverage=100,
-                    subject_taxid="149540",
-                    subject_taxids="149540",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="1495501",
+                    subject_taxids="1495501",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 # Query 2 hits - Also Salmonella genus
                 BlastHit(
-                    query_id='query2', subject_id='subject_a',
+                    query_id='query1', subject_id='subject_b',
                     percent_identity=97.0, 
                     alignment_length=500,
                     query_length=500,
@@ -759,13 +786,12 @@ class TestRewriteBlastHits:
                     evalue=0.0,
                     bit_score=920,  # Higher than subject_b for this query
                     query_coverage=100,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="1495501",
+                    subject_taxids="1495501",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
-                    query_id='query2', subject_id='subject_b',
+                    query_id='query2', subject_id='subject_a',
                     percent_identity=94.0, 
                     alignment_length=500,
                     query_length=500,
@@ -777,11 +803,27 @@ class TestRewriteBlastHits:
                     evalue=0.0,
                     bit_score=880,  # Lower than subject_a for this query
                     query_coverage=100,
-                    subject_taxid="149540",
-                    subject_taxids="149540",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="1495501",
+                    subject_taxids="1495501",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
+                BlastHit(
+                    query_id='query2', subject_id='subject_b',
+                    percent_identity=94.0,
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1,
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=880,  # Lower than subject_a for this query
+                    query_coverage=100,
+                    subject_taxid="1495501",
+                    subject_taxids="1495501",
+                    subject_taxonomy=self.salmonella_taxonomy
+                )
             ]
             
             # Track what representatives were extracted for each query
@@ -799,8 +841,9 @@ class TestRewriteBlastHits:
                 output_dir=tmppath,
                 rank='genus'
             )
-            
-            # Both queries should have results
+            print(results)
+
+            # All queries should have results
             assert len(results) == 2
             assert 'query1' in results
             assert 'query2' in results
@@ -838,7 +881,7 @@ class TestRewriteBlastHits:
             
             # Check header exists with all expected fields
             header = lines[0].strip().split('\t')
-            assert header == self.EXPECTED_FIELDS
+            assert header == self.expected_fields
     
     def test_rewrite_blast_hits_multiple_records(self):
         """Test writing multiple blast hits."""
@@ -861,12 +904,9 @@ class TestRewriteBlastHits:
                     evalue=0.0,
                     bit_score=998.0,
                     query_coverage=100.0,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella",
-                    subject_group_tid="1224",
-                    subject_group_name="Pseudomonadota"
+                    subject_taxid="1495393",
+                    subject_taxids="1495394",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='seq2',
@@ -884,10 +924,7 @@ class TestRewriteBlastHits:
                     query_coverage=100.0,
                     subject_taxid="9606",
                     subject_taxids="9606",
-                    subject_rank_tid="9605",
-                    subject_rank_name="Homo",
-                    subject_group_tid="7711",
-                    subject_group_name="Chordata"
+                    subject_taxonomy=self.human_taxonomy
                 )
             ]
             
@@ -905,12 +942,10 @@ class TestRewriteBlastHits:
             # Check first data line
             data1 = lines[1].strip().split('\t')
             assert data1[0] == "seq1"
-            assert data1[17] == "1224"
-            assert data1[18] == "Pseudomonadota"
+            assert data1[15] == str(self.salmonella_taxonomy)
             
             # Check second data line
             data2 = lines[2].strip().split('\t')
             assert data2[0] == "seq2"
-            assert data2[17] == "7711"
-            assert data2[18] == "Chordata"
+            assert data2[15] == str(self.human_taxonomy)
 

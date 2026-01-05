@@ -294,7 +294,7 @@ Notes:
         group_name = None
         for query_id, hits in query_hits_map.items():
             if hits:
-                group_name = hits[0].subject_group_name
+                group_name = hits[0].subject_taxonomy[args.group_rank][1]
                 break
         
         if not group_name:
@@ -315,6 +315,7 @@ Notes:
             group_tid=group_tid,
             group_name=group_name,
             query_hits_map=query_hits_map,
+            taxonomic_rank=args.rank,
             query_fasta=args.query_fasta,
             output_fasta=combined_fasta,
             database=args.database,
@@ -347,7 +348,6 @@ Notes:
             
             try:
                 result = process_grouped_alignment_and_tree(
-                    group_tid=group_tid,
                     group_name=group_name,
                     group_dir=group_dir,
                     blast_hits=blast_hits,

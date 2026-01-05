@@ -65,7 +65,8 @@ class SequenceTrimmer:
         fasta_path: Path,
         blast_hits: List[BlastHit],
         output_fasta: Path,
-        query_id: str
+        query_id: str,
+        taxonomic_rank: str
     ) -> bool:
         """
         Trim sequences in a FASTA file based on BLAST hit coordinates.
@@ -78,7 +79,8 @@ class SequenceTrimmer:
             blast_hits: List of BlastHit objects for this query
             output_fasta: Path to output FASTA file with trimmed sequences
             query_id: The query sequence ID to include in output
-            
+            taxonomic_rank: the taxonomic rank to use for taxonomic labels (e.g., "genus")
+
         Returns:
             True if successful, False otherwise
         """
@@ -124,8 +126,8 @@ class SequenceTrimmer:
                     
                     # Write trimmed sequence with taxonomic information in header
                     header = seq_id
-                    if hit.subject_rank_name:
-                        header = f"{seq_id} {hit.subject_rank_name}"
+                    if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
+                        header = f"{seq_id} {hit.subject_taxonomy[taxonomic_rank][1]}"
                     
                     out.write(f">{header}\n")
                     # Write sequence in lines of 60 characters
@@ -337,7 +339,7 @@ class IQTreeBuilder:
         tree_file: Path,
         blast_hits: List[BlastHit],
         output_tree: Path,
-        label_field: str = "subject_genus_name"
+        taxonomic_rank: str,
     ) -> bool:
         """
         Relabel tree nodes with taxonomic names.
@@ -349,7 +351,7 @@ class IQTreeBuilder:
             tree_file: Path to input tree file (Newick format)
             blast_hits: List of BlastHit objects with taxonomic information
             output_tree: Path to output tree file with relabeled nodes
-            label_field: Field from BlastHit to use for labels (default: "subject_genus_name")
+            taxonomic_rank: the taxonomic rank to use for relabeling (e.g., "genus")
             
         Returns:
             True if successful, False otherwise
@@ -359,7 +361,10 @@ class IQTreeBuilder:
             # Trees will have accessions (e.g., MZ387488.1) not full IDs
             label_map = {}
             for hit in blast_hits:
-                label = getattr(hit, label_field, None)
+                label = "unknown"
+                if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
+                    label = hit.subject_taxonomy[taxonomic_rank][1]
+                label_map[hit.subject_id] = label
                 if label:
                     # Clean up the label for tree format (Newick format constraints)
                     # Replace spaces, colons, parentheses, commas, and semicolons
@@ -372,15 +377,7 @@ class IQTreeBuilder:
                     # Use accession for mapping since that's what appears in trees
                     accession = hit.get_accession()
                     label_map[accession] = clean_label
-                    # Also handle potential header prefixes from trimmed files
-                    # These may have rank name, genus name, or both
-                    if hit.subject_rank_name:
-                        header_with_rank = f"{accession} {hit.subject_rank_name}"
-                        label_map[header_with_rank] = clean_label
-                    if hit.subject_genus_name and hit.subject_genus_name != hit.subject_rank_name:
-                        header_with_genus = f"{accession} {hit.subject_genus_name}"
-                        label_map[header_with_genus] = clean_label
-            
+
             # Read the tree file
             with open(tree_file, 'r') as f:
                 tree_string = f.read()
@@ -410,6 +407,7 @@ def process_query_alignment_and_tree(
     query_dir: Path,
     blast_hits: List[BlastHit],
     query_fasta: Path,
+    taxonomic_rank: str,
     num_threads: int = 1
 ) -> Dict[str, Optional[Path]]:
     """
@@ -420,6 +418,7 @@ def process_query_alignment_and_tree(
         query_dir: Directory containing query-specific files
         blast_hits: List of BlastHit objects for this query (with taxonomy info)
         query_fasta: Path to original query FASTA file
+        taxonomic_rank: The taxonomic rank to use for relabeling the tree
         num_threads: Number of threads to use
         
     Returns:
@@ -482,6 +481,7 @@ def process_query_alignment_and_tree(
         fasta_path=combined_fasta,
         blast_hits=blast_hits,
         output_fasta=trimmed_fasta,
+        taxonomic_rank=taxonomic_rank,
         query_id=query_id
     ):
         results['trimmed_fasta'] = trimmed_fasta
@@ -521,7 +521,8 @@ def process_query_alignment_and_tree(
     if IQTreeBuilder.relabel_tree_with_taxonomy(
         tree_file=tree_file,
         blast_hits=blast_hits,
-        output_tree=labeled_tree
+        output_tree=labeled_tree,
+        taxonomic_rank=taxonomic_rank
     ):
         results['labeled_tree'] = labeled_tree
         logger.info(f"Labeled tree saved to: {labeled_tree}")
@@ -582,7 +583,8 @@ def check_alignment_consistency(blast_hits: List[BlastHit], tolerance: int = 50)
 
 
 def group_hits_by_group_rank(
-    blast_hits: List[BlastHit]
+    blast_hits: List[BlastHit],
+    group_rank: str,
 ) -> Dict[str, Dict[str, List[BlastHit]]]:
     """
     Group BLAST hits by group_rank across all queries.
@@ -597,8 +599,8 @@ def group_hits_by_group_rank(
     grouped = defaultdict(lambda: defaultdict(list))
     
     for hit in blast_hits:
-        if hit.subject_group_tid:
-            grouped[hit.subject_group_tid][hit.query_id].append(hit)
+        if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
+            grouped[hit.subject_taxonomy[group_rank][1]][hit.query_id].append(hit)
         else:
             logger.warning(
                 f"Hit {hit.subject_id} for query {hit.query_id} has no group taxonomy information"
@@ -610,7 +612,7 @@ def group_hits_by_group_rank(
         group_name = None
         for query_hits in queries.values():
             if query_hits:
-                group_name = query_hits[0].subject_group_name
+                group_name = query_hits[0].subject_taxonomy[group_rank][1]
                 break
         logger.info(
             f"  Group {group_name} ({group_tid}): {len(queries)} queries, "
@@ -624,6 +626,7 @@ def create_grouped_fasta_with_queries(
     group_tid: str,
     group_name: str,
     query_hits_map: Dict[str, List[BlastHit]],
+    taxonomic_rank: str,
     query_fasta: Path,
     output_fasta: Path,
     database: str = "core_nt",
@@ -636,6 +639,7 @@ def create_grouped_fasta_with_queries(
         group_tid: Taxonomy ID of the group
         group_name: Name of the taxonomic group
         query_hits_map: Dictionary mapping query_id to list of BlastHit objects
+        taxonomic_rank: Taxonomic rank to use for grouping (e.g., "genus")
         query_fasta: Path to original query FASTA file
         output_fasta: Path to output grouped FASTA file
         database: Name of BLAST database
@@ -705,8 +709,8 @@ def create_grouped_fasta_with_queries(
                 if accession in ref_sequences:
                     ref_seq = ref_sequences[accession]
                     header = accession
-                    if hit.subject_rank_name:
-                        header = f"{accession} {hit.subject_rank_name}"
+                    if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
+                        header = f"{accession} {hit.subject_taxonomy[taxonomic_rank][1]}"
                     
                     out.write(f">{header}\n")
                     for i in range(0, len(ref_seq), 60):
@@ -818,7 +822,6 @@ def trim_grouped_sequences(
 
 
 def process_grouped_alignment_and_tree(
-    group_tid: str,
     group_name: str,
     group_dir: Path,
     blast_hits: List[BlastHit],
@@ -829,8 +832,7 @@ def process_grouped_alignment_and_tree(
     Complete pipeline for a taxonomic group: trim, align, and build tree.
     
     Args:
-        group_tid: Taxonomy ID of the group
-        group_name: Name of the taxonomic group
+        group_name: The name of the group, used for file naming
         group_dir: Directory containing group-specific files
         blast_hits: List of BlastHit objects for all queries in the group
         query_ids: List of query sequence IDs in this group
@@ -851,7 +853,7 @@ def process_grouped_alignment_and_tree(
         'tree': None,
         'labeled_tree': None
     }
-    
+
     # File paths
     safe_group_name = group_name.replace(' ', '_').replace('/', '_').replace('|', '_')
     combined_fasta = group_dir / f"{safe_group_name}_combined.fasta"
@@ -913,7 +915,8 @@ def process_grouped_alignment_and_tree(
     if IQTreeBuilder.relabel_tree_with_taxonomy(
         tree_file=tree_file,
         blast_hits=blast_hits,
-        output_tree=labeled_tree
+        output_tree=labeled_tree,
+        taxonomic_rank=taxonomic_rank
     ):
         results['labeled_tree'] = labeled_tree
         logger.info(f"Labeled tree saved to: {labeled_tree}")

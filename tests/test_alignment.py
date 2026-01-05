@@ -17,7 +17,32 @@ from eplace_lib.alignment import (
 
 class TestSequenceTrimmer:
     """Test cases for SequenceTrimmer class."""
-    
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
+
     def test_trim_sequence_by_coordinates_forward(self):
         """Test trimming a sequence with forward strand coordinates."""
         sequence = "ATCGATCGATCGATCGATCG"  # 20bp
@@ -79,10 +104,9 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
                     evalue=1e-10,
                     bit_score=100,
                     query_coverage=83.3,
-                    subject_taxid="12345",
-                    subject_taxids="12345",
-                    subject_rank_tid="123",
-                    subject_rank_name="TestGenus"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='query1',
@@ -98,10 +122,9 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
                     evalue=1e-8,
                     bit_score=80,
                     query_coverage=55.6,
-                    subject_taxid="67890",
-                    subject_taxids="67890",
-                    subject_rank_tid="678",
-                    subject_rank_name="AnotherGenus"
+                    subject_taxid="9606",
+                    subject_taxids="9606;9605",
+                    subject_taxonomy=self.human_taxonomy
                 )
             ]
             
@@ -110,6 +133,7 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
             success = SequenceTrimmer.trim_sequences_from_blast_hits(
                 fasta_path=fasta_path,
                 blast_hits=blast_hits,
+                taxonomic_rank='genus',
                 output_fasta=output_fasta,
                 query_id='query1'
             )
@@ -120,8 +144,8 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
             # Read and verify output
             content = output_fasta.read_text()
             assert '>query1' in content
-            assert '>subject1 TestGenus' in content
-            assert '>subject2 AnotherGenus' in content
+            assert '>subject1 Salmonella' in content
+            assert '>subject2 Homo' in content
     
     def test_trim_sequences_with_gi_format_blast_hits(self):
         """Test trimming when BLAST hits have gi|...|gb|...| format but FASTA has accessions."""
@@ -155,10 +179,9 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
                     evalue=1e-10,
                     bit_score=100,
                     query_coverage=83.3,
-                    subject_taxid="12345",
-                    subject_taxids="12345",
-                    subject_rank_tid="123",
-                    subject_rank_name="TestGenus"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='query1',
@@ -174,10 +197,9 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
                     evalue=1e-8,
                     bit_score=80,
                     query_coverage=55.6,
-                    subject_taxid="67890",
-                    subject_taxids="67890",
-                    subject_rank_tid="678",
-                    subject_rank_name="AnotherGenus"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.human_taxonomy
                 )
             ]
             
@@ -187,6 +209,7 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
                 fasta_path=fasta_path,
                 blast_hits=blast_hits,
                 output_fasta=output_fasta,
+                taxonomic_rank='genus',
                 query_id='query1'
             )
             
@@ -196,8 +219,8 @@ GCTAGCTAGCTAGCTAGCTAGCTAGCTAGC
             # Read and verify output
             content = output_fasta.read_text()
             assert '>query1' in content
-            assert '>MZ387488.1 TestGenus' in content
-            assert '>NZ_CP123456.1 AnotherGenus' in content
+            assert '>MZ387488.1 Salmonella' in content
+            assert '>NZ_CP123456.1 Homo' in content
 
 
 class TestMAFFTAligner:
@@ -275,7 +298,25 @@ class TestMAFFTAligner:
 
 class TestIQTreeBuilder:
     """Test cases for IQTreeBuilder class."""
-    
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella'),
+            'species': ('28901', 'Salmonella enterica')
+        }
+        self.ecoli_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('561', 'Escherichia'),
+            'species': ('562', 'Escherichia coli')
+        }
+
     def test_check_iqtree_available(self):
         """Test checking if IQTree is available."""
         available, cmd = IQTreeBuilder.check_iqtree_available()
@@ -361,10 +402,7 @@ class TestIQTreeBuilder:
                     query_coverage=83.3,
                     subject_taxid="12345",
                     subject_taxids="12345",
-                    subject_rank_tid="123",
-                    subject_rank_name="Salmonella",
-                    subject_genus_tid="123",
-                    subject_genus_name="Salmonella"
+                    subject_taxonomy=self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='query1',
@@ -382,10 +420,7 @@ class TestIQTreeBuilder:
                     query_coverage=55.6,
                     subject_taxid="67890",
                     subject_taxids="67890",
-                    subject_genus_tid="678",
-                    subject_genus_name="Escherichia coli",
-                    subject_rank_tid="678",
-                    subject_rank_name="Escherichia coli"
+                    subject_taxonomy=self.ecoli_taxonomy
                 )
             ]
             
@@ -395,7 +430,8 @@ class TestIQTreeBuilder:
             success = IQTreeBuilder.relabel_tree_with_taxonomy(
                 tree_file=tree_file,
                 blast_hits=blast_hits,
-                output_tree=output_tree
+                output_tree=output_tree,
+                taxonomic_rank='species'
             )
             
             assert success is True
@@ -409,7 +445,16 @@ class TestIQTreeBuilder:
 
 class TestProcessQueryAlignmentAndTree:
     """Test cases for the complete pipeline."""
-    
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+
     @patch('eplace_lib.alignment.MAFFTAligner.align_sequences')
     @patch('eplace_lib.alignment.IQTreeBuilder.build_tree')
     @patch('eplace_lib.alignment.IQTreeBuilder.relabel_tree_with_taxonomy')
@@ -452,10 +497,9 @@ class TestProcessQueryAlignmentAndTree:
                     evalue=1e-10,
                     bit_score=100,
                     query_coverage=100.0,
-                    subject_taxid="12345",
-                    subject_taxids="12345",
-                    subject_rank_tid="123",
-                    subject_rank_name="TestGenus"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
                 )
             ]
             
@@ -474,6 +518,7 @@ class TestProcessQueryAlignmentAndTree:
                 query_dir=query_dir,
                 blast_hits=blast_hits,
                 query_fasta=query_fasta,
+                taxonomic_rank='genus',
                 num_threads=1
             )
             

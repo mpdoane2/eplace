@@ -274,6 +274,7 @@ Notes:
                     query_id=query_id,
                     query_dir=query_dir,
                     blast_hits=query_hits,
+                    taxonomic_rank=args.rank,
                     query_fasta=args.query_fasta,
                     num_threads=args.num_threads
                 )

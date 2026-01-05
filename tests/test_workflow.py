@@ -13,7 +13,32 @@ from eplace_lib.taxonomy import process_blast_results_for_taxonomy
 
 class TestBlastWorkflow:
     """Test cases for the complete BLAST workflow."""
-    
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
+
     @patch('eplace_lib.blast_analysis.BlastRunner.run_blastn')
     @patch('eplace_lib.blast_analysis.BlastRunner.parse_blast_results')
     @patch('eplace_lib.taxonomy.SequenceExtractor.extract_sequences')
@@ -47,10 +72,9 @@ AGAAGGCTTTGGCTTCTGATAGTCATGGACTCACTAGGCTGCTGAGGAAGATCAATAATACCTACTGGAATCAGTCATGA
                     evalue=0.0,
                     bit_score=998,
                     query_coverage=100,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy = self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
@@ -66,9 +90,8 @@ AGAAGGCTTTGGCTTCTGATAGTCATGGACTCACTAGGCTGCTGAGGAAGATCAATAATACCTACTGGAATCAGTCATGA
                     bit_score=776,
                     query_coverage=100,
                     subject_taxid="9606",
-                    subject_taxids="9606",
-                    subject_rank_tid="9605",
-                    subject_rank_name="Homo"
+                    subject_taxids="9606;9605",
+                    subject_taxonomy = self.human_taxonomy
                 ),
                 BlastHit(
                     query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
@@ -84,9 +107,8 @@ AGAAGGCTTTGGCTTCTGATAGTCATGGACTCACTAGGCTGCTGAGGAAGATCAATAATACCTACTGGAATCAGTCATGA
                     bit_score=156,
                     query_coverage=27.3809523809524,
                     subject_taxid="9597",
-                    subject_taxids="9597",
-                    subject_rank_tid="9596",
-                    subject_rank_name="Pan"
+                    subject_taxids="9597;9596;9604",
+                    subject_taxonomy = self.pan_taxonomy
                 )
             ]
             mock_parse.return_value = mock_hits
@@ -202,10 +224,9 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
                     evalue=0.0,
                     bit_score=998,
                     query_coverage=100,
-                    subject_taxid="149539",
-                    subject_taxids="149539",
-                    subject_rank_tid="590",
-                    subject_rank_name="Salmonella"
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy = self.salmonella_taxonomy
                 ),
                 BlastHit(
                     query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
@@ -221,9 +242,8 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
                     bit_score=776,
                     query_coverage=100,
                     subject_taxid="9606",
-                    subject_taxids="9606",
-                    subject_rank_tid="9605",
-                    subject_rank_name="Homo"
+                    subject_taxids="9606;9605",
+                    subject_taxonomy = self.human_taxonomy
                 ),
                 BlastHit(
                     query_id='seq3', subject_id='gi|2694387494|ref|XM_055113774.3|',
@@ -239,9 +259,8 @@ ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG
                     bit_score=156,
                     query_coverage=27.3809523809524,
                     subject_taxid="9597",
-                    subject_taxids="9597",
-                    subject_rank_tid="9596",
-                    subject_rank_name="Pan"
+                    subject_taxids="9597;9596;9604",
+                    subject_taxonomy = self.pan_taxonomy
                 )
             ]
             mock_parse.return_value = mock_hits
