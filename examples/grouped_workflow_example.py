@@ -293,12 +293,8 @@ Notes:
     
     group_results = {}
     for group_tid, query_hits_map in grouped_hits.items():
-        # Get group name from first hit
-        group_name = None
-        for query_id, hits in query_hits_map.items():
-            if hits:
-                group_name = hits[0].subject_taxonomy[args.group_rank][1]
-                break
+        # Use the grouping key directly as the group name
+        group_name = group_tid
         
         if not group_name:
             logger.warning(f"No group name found for group {group_tid}, skipping")
