@@ -594,8 +594,9 @@ def group_hits_by_group_rank(
         blast_hits: List of BlastHit objects with group taxonomy information
         
     Returns:
-        Dictionary mapping group_rank_tid to another dict mapping query_id to list of hits
-        Format: {group_rank_tid: {query_id: [hits]}}
+        Dictionary mapping group_rank_name (taxonomy name) to another dict mapping
+        query_id to list of hits.
+        Format: {group_rank_name: {query_id: [hits]}}
     """
     grouped = defaultdict(lambda: defaultdict(list))
     
