@@ -159,7 +159,7 @@ Notes:
     
     # Validate input file
     if not args.query_fasta.exists():
-        logger.error(f"Query FASTA file not found: {args.query_fasta}")
+        logger.exception(f"Query FASTA file not found: {args.query_fasta}")
         sys.exit(1)
     
     # Create output directory
@@ -194,8 +194,8 @@ Notes:
         logger.info(f"Found {len(sequences)} query sequences")
         for seq_id in sequences.keys():
             logger.info(f"  - {seq_id} ({len(sequences[seq_id])} bp)")
-    except Exception as e:
-        logger.error(f"Error reading FASTA file: {e}")
+    except Exception:
+        logger.exception(f"Error reading FASTA file")
         sys.exit(1)
     
     # Step 2: Run BLAST search
@@ -215,14 +215,14 @@ Notes:
         )
         
         if not success:
-            logger.error("BLAST search failed")
+            logger.exception("BLAST search failed")
             sys.exit(1)
         
         logger.info(f"BLAST search completed successfully")
         logger.info(f"Found {len(filtered_hits)} hits after filtering")
         
-    except Exception as e:
-        logger.error(f"Error during BLAST search: {e}")
+    except Exception:
+        logger.exception(f"Error during BLAST search")
         sys.exit(1)
     
     # Step 3: Process taxonomy information
@@ -246,8 +246,8 @@ Notes:
             else:
                 logger.warning(f"  {query_id}: Failed to extract sequences")
         
-    except Exception as e:
-        logger.error(f"Error extracting sequences: {e}")
+    except Exception:
+        logger.exception(f"Error extracting sequences (grouped workflow)")
         sys.exit(1)
 
     logger.info("Rewriting the BLAST output file with the new annotations")
@@ -257,8 +257,8 @@ Notes:
             output_file=args.output_dir / "blast_results_annotated.txt",
             header=True
         )
-    except Exception as e:
-        logger.error(f"Error rewriting the blast hits: {e}")
+    except Exception:
+        logger.exception(f"Error rewriting the blast hits: {e}")
         sys.exit(1)
 
     # Step 4: Check alignment consistency
@@ -282,7 +282,7 @@ Notes:
     grouped_hits = group_hits_by_group_rank(filtered_hits)
     
     if not grouped_hits:
-        logger.error("No groups found after grouping by rank")
+        logger.exception("No groups found after grouping by rank")
         sys.exit(1)
 
     # Step 6: Create grouped FASTA files

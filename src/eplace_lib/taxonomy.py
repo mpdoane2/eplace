@@ -44,8 +44,8 @@ class TaxonomyExtractor:
         # we need to get the whole lineage, and then convert it to a dict
         try:
             df = pytaxonkit.lineage(tax_ids)
-        except Exception as e:
-            logger.error(f"Error retrieving taxonomic lineages: {e}")
+        except Exception:
+            logger.exception(f"Error retrieving taxonomic lineages")
             sys.exit(1)
 
         df['names'] = df['FullLineage'].str.split(';')
@@ -267,7 +267,7 @@ class SequenceExtractor:
             logger.error("Sequence extraction timed out")
             return False
         except Exception as e:
-            logger.error(f"Error extracting sequences: {e}")
+            logger.error(f"Error extracting sequences (taxonomy): {e}")
             return False
         finally:
             # Clean up temporary ID file
