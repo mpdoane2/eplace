@@ -6,6 +6,7 @@ aligning sequences using MAFFT, and building phylogenetic trees using IQTree.
 """
 
 import os
+import sys
 import subprocess
 import logging
 from pathlib import Path
@@ -660,19 +661,23 @@ def create_grouped_fasta_with_queries(
     # Collect unique reference sequences (by labeling rank) so we only get one example
     # For each unique reference, keep the hit with the best bit score
     unique_references = {}
+    unique_labels = {}
     for query_id, hits in query_hits_map.items():
         for hit in hits:
             label = hit.subject_id
             if isinstance(hit.subject_taxonomy, dict) and labeling_rank in hit.subject_taxonomy:
-                label = hit.subject_taxonomy[labeling_rank]
-            if label not in unique_references:
-                unique_references[label] = hit
+                label = hit.subject_taxonomy[labeling_rank][1]
+            if label not in unique_labels:
+                unique_labels[label] = hit
+                unique_references[hit.subject_id] = hit
             else:
                 # Keep the hit with better bit score
-                if hit.bit_score > unique_references[label].bit_score:
-                    unique_references[label] = hit
-    
+                if hit.bit_score > unique_labels[label].bit_score:
+                    unique_references[hit.subject_id] = hit
+                    unique_labels[label] = hit
+
     logger.info(f"Found {len(unique_references)} unique reference sequences")
+    logger.info(f"Our unique labels are {unique_labels}")
     
     # Extract reference sequences
     seq_extractor = SequenceExtractor(blastdb_path)
@@ -686,8 +691,8 @@ def create_grouped_fasta_with_queries(
         )
         
         if not success:
-            logger.error("Failed to extract reference sequences")
-            return False
+            logger.exception("Failed to extract reference sequences")
+            sys.exit(1)
         
         # Read extracted references
         ref_sequences = FastaReader.read_fasta(temp_ref_fasta)
