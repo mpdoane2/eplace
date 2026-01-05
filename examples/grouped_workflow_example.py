@@ -219,7 +219,7 @@ Notes:
         )
         
         if not success:
-            logger.exception("BLAST search failed")
+            logger.error("BLAST search failed")
             sys.exit(1)
         
         logger.info(f"BLAST search completed successfully")
