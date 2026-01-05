@@ -368,7 +368,6 @@ def process_blast_results_for_taxonomy(
     blast_hits: List[BlastHit],
     output_dir: Path,
     rank: str = "genus",
-    group_rank: str = "class",
     database: str = "core_nt",
     blastdb_path: Optional[Path] = None
 ) -> Dict[str, Optional[Path]]:
@@ -389,9 +388,7 @@ def process_blast_results_for_taxonomy(
     VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     if rank not in VALID_RANKS:
         raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-    if group_rank not in VALID_RANKS:
-        raise ValueError(f"Grouping Rank: {group_rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-    
+
     tax_extractor = TaxonomyExtractor()
     seq_extractor = SequenceExtractor(blastdb_path)
     

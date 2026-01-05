@@ -24,12 +24,8 @@ from pathlib import Path
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits
-from eplace_lib.alignment import (
-    check_alignment_consistency,
-    group_hits_by_group_rank,
-    create_grouped_fasta_with_queries,
-    process_grouped_alignment_and_tree
-)
+from eplace_lib.alignment import check_alignment_consistency, group_hits_by_group_rank
+from eplace_lib.alignment import create_grouped_fasta_with_queries, process_grouped_alignment_and_tree
 
 # Configure logging
 logging.basicConfig(
@@ -93,6 +89,14 @@ Notes:
         default='class',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
         help='Taxonomic rank to use for grouping sequences across queries (default: class)'
+    )
+
+    parser.add_argument(
+        '--tree-label-rank',
+        type=str,
+        default='genus',
+        choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
+        help='Taxonomic rank to use for tree labeling (default: genus)'
     )
     
     parser.add_argument(
@@ -279,7 +283,7 @@ Notes:
 
     # Step 5: Group hits by group_rank
     logger.info(f"\n[Step 5/7] Grouping hits by {args.group_rank}...")
-    grouped_hits = group_hits_by_group_rank(filtered_hits)
+    grouped_hits = group_hits_by_group_rank(filtered_hits, args.group_rank)
     
     if not grouped_hits:
         logger.exception("No groups found after grouping by rank")
@@ -350,6 +354,7 @@ Notes:
                 result = process_grouped_alignment_and_tree(
                     group_name=group_name,
                     group_dir=group_dir,
+                    taxonomic_rank=args.tree_label_rank,
                     blast_hits=blast_hits,
                     query_ids=query_ids,
                     num_threads=args.num_threads

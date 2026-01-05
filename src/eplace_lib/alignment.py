@@ -824,6 +824,7 @@ def trim_grouped_sequences(
 def process_grouped_alignment_and_tree(
     group_name: str,
     group_dir: Path,
+    taxonomic_rank: str,
     blast_hits: List[BlastHit],
     query_ids: List[str],
     num_threads: int = 1
@@ -834,6 +835,7 @@ def process_grouped_alignment_and_tree(
     Args:
         group_name: The name of the group, used for file naming
         group_dir: Directory containing group-specific files
+        taxonomic_rank: Taxonomic rank to use for labeling the tree
         blast_hits: List of BlastHit objects for all queries in the group
         query_ids: List of query sequence IDs in this group
         num_threads: Number of threads to use
