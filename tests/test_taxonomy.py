@@ -841,7 +841,6 @@ class TestRewriteBlastHits:
                 output_dir=tmppath,
                 rank='genus'
             )
-            print(results)
 
             # All queries should have results
             assert len(results) == 2
