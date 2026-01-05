@@ -696,7 +696,7 @@ def create_grouped_fasta_with_queries(
         )
         
         if not success:
-            logger.exception("Failed to extract reference sequences")
+            logger.error("Failed to extract reference sequences")
             sys.exit(1)
         
         # Read extracted references
