@@ -45,7 +45,7 @@ class TaxonomyExtractor:
         try:
             df = pytaxonkit.lineage(tax_ids)
         except Exception:
-            logger.exception(f"Error retrieving taxonomic lineages")
+            logger.exception("Error retrieving taxonomic lineages")
             sys.exit(1)
 
         df['names'] = df['FullLineage'].str.split(';')
