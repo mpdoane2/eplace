@@ -26,7 +26,12 @@ from .alignment import (
     SequenceTrimmer,
     MAFFTAligner,
     IQTreeBuilder,
-    process_query_alignment_and_tree
+    process_query_alignment_and_tree,
+    check_alignment_consistency,
+    group_hits_by_group_rank,
+    create_grouped_fasta_with_queries,
+    trim_grouped_sequences,
+    process_grouped_alignment_and_tree
 )
 
 __all__ = [
@@ -43,5 +48,10 @@ __all__ = [
     "SequenceTrimmer",
     "MAFFTAligner",
     "IQTreeBuilder",
-    "process_query_alignment_and_tree"
+    "process_query_alignment_and_tree",
+    "check_alignment_consistency",
+    "group_hits_by_group_rank",
+    "create_grouped_fasta_with_queries",
+    "trim_grouped_sequences",
+    "process_grouped_alignment_and_tree"
 ]

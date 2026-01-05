@@ -73,7 +73,7 @@ Notes:
     )
 
     parser.add_argument(
-        '--group_rank',
+        '--group-rank',
         type=str,
         default='class',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
@@ -172,8 +172,8 @@ Notes:
         logger.info(f"Found {len(sequences)} query sequences")
         for seq_id in sequences.keys():
             logger.info(f"  - {seq_id} ({len(sequences[seq_id])} bp)")
-    except Exception as e:
-        logger.error(f"Error reading FASTA file: {e}")
+    except Exception:
+        logger.exception(f"Error reading FASTA file")
         sys.exit(1)
     
     # Step 2: Run BLAST search
@@ -199,8 +199,8 @@ Notes:
         logger.info(f"BLAST search completed successfully")
         logger.info(f"Found {len(filtered_hits)} hits after filtering")
         
-    except Exception as e:
-        logger.error(f"Error during BLAST search: {e}")
+    except Exception:
+        logger.exception(f"Error during BLAST search")
         sys.exit(1)
     
     # Step 3: Group hits by query and display summary
@@ -220,7 +220,6 @@ Notes:
             blast_hits=filtered_hits,
             output_dir=args.output_dir,
             rank=args.rank,
-            group_rank=args.group_rank,
             database=args.database,
             blastdb_path=args.blastdb_path
         )
@@ -232,8 +231,8 @@ Notes:
             else:
                 logger.warning(f"  {query_id}: Failed to extract sequences")
         
-    except Exception as e:
-        logger.error(f"Error extracting sequences: {e}")
+    except Exception:
+        logger.exception(f"Error extracting sequences (blast workflow)")
         sys.exit(1)
 
     logger.info("Rewriting the blast output file with the new annotations")
@@ -243,8 +242,8 @@ Notes:
             output_file=args.output_dir / "blast_results_annotated.txt",
             header=True
         )
-    except Exception as e:
-        logger.error(f"Error rewriting the blast hits: {e}")
+    except Exception:
+        logger.exception(f"Error rewriting the blast hits")
         sys.exit(1)
 
     # Step 5: Align sequences and build trees (if not skipped)
@@ -274,6 +273,7 @@ Notes:
                     query_id=query_id,
                     query_dir=query_dir,
                     blast_hits=query_hits,
+                    taxonomic_rank=args.rank,
                     query_fasta=args.query_fasta,
                     num_threads=args.num_threads
                 )

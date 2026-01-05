@@ -8,6 +8,7 @@ selecting representative sequences per taxonomic rank, and extracting sequences 
 import os
 import subprocess
 import logging
+import sys
 from pathlib import Path
 from typing import Optional, List, Dict
 from collections import defaultdict
@@ -24,19 +25,8 @@ class TaxonomyExtractor:
     """
     Class for extracting taxonomic information from sequence IDs.
     """
-    
-    
-    def __init__(self, rank: str = "genus", group_rank: str = "class"):
-        """Initialize the TaxonomyExtractor."""
-        VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
-        if rank not in VALID_RANKS:
-            raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-        if group_rank not in VALID_RANKS:
-            raise ValueError(f"Group Rank: {group_rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-        self.rank = rank
-        self.group_rank = group_rank
-    
-    def parse_taxids(self, tax_ids: list[int]) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
+
+    def parse_taxids(self, tax_ids: list[str]) -> dict[str, dict[str, tuple[str, str]]]:
         """
         Parse taxonomic information from the taxonomy IDs from the BLAST hits
 
@@ -44,42 +34,36 @@ class TaxonomyExtractor:
             tax_ids: the taxonomy IDs reported by BLAST
             
         Returns:
-            tuple containing:
-                - dict[str, tuple[str, str]]: mapping taxid to (rank_taxid, rank_name) for the specified rank
-                - dict[str, tuple[str, str]]: mapping taxid to (phylum_taxid, phylum_name)
+           dictionary containing the rank and a tuple of the taxonomy ID and the name
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
+        VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+        taxonomy_dict = {}
 
         # we need to get the whole lineage, and then convert it to a dict
         try:
             df = pytaxonkit.lineage(tax_ids)
-        except Exception as e:
-            logger.error(f"Error retrieving taxonomic lineages: {e}")
-            return {}, {}
+        except Exception:
+            logger.exception("Error retrieving taxonomic lineages")
+            sys.exit(1)
+
         df['names'] = df['FullLineage'].str.split(';')
         df['taxids'] = df['FullLineageTaxIDs'].str.split(';')
         df['ranks'] = df['FullLineageRanks'].str.split(';')
         long_df = df.explode(['names', 'taxids', 'ranks'])
-        rank_dict = {
-                str(tid): (str(taxid), str(name))
-                for tid, taxid, name in (
-                            long_df.loc[long_df['ranks'] == self.rank, ['TaxID', 'taxids', 'names']]
-                            .drop_duplicates()
-                            .itertuples(index=False, name=None)
-                        )
-        }
+        filtered = long_df[long_df['ranks'].isin(VALID_RANKS)]
 
-        groups_dict = {
-                str(tid): (str(taxid), str(name))
-                for tid, taxid, name in (
-                            long_df.loc[long_df['ranks'] == self.group_rank, ['TaxID', 'taxids', 'names']]
-                            .drop_duplicates()
-                            .itertuples(index=False, name=None)
-                        )
-        }
+        for tid, rank, taxid, name in (
+                filtered[['TaxID', 'ranks', 'taxids', 'names']]
+                        .drop_duplicates()
+                        .itertuples(index=False, name=None)
+        ):
+            tid = str(tid)
+            taxid = str(taxid)
 
-        return rank_dict, groups_dict
+            taxonomy_dict.setdefault(tid, {})[rank] = (taxid, name)
+        return taxonomy_dict
     
     def group_hits_by_query(
         self,
@@ -102,6 +86,7 @@ class TaxonomyExtractor:
     def select_representatives_by_rank(
         self,
         hits: list[BlastHit],
+        rank: str,
         max_per_rank: int = 1,
         preferred_representatives: Optional[Dict[str, str]] = None
     ) -> list[BlastHit]:
@@ -110,6 +95,7 @@ class TaxonomyExtractor:
         
         Args:
             hits: list of BlastHit objects for a single query
+            rank: Taxonomic rank for representative selection
             max_per_rank: Maximum number of representatives per rank (default: 1)
             preferred_representatives: Optional dictionary mapping rank_tid to preferred subject_id
                                       to ensure consistent representatives across queries
@@ -126,15 +112,27 @@ class TaxonomyExtractor:
         
         reported_hits = set()
         for hit in hits:
-            if hit.subject_rank_tid:
+            if not hit.subject_taxonomy:
+                logger.info(f"Skipping the taxonomy for {hit.query_id} as no subject taxonomy")
+                continue
+            if rank not in hit.subject_taxonomy:
+                logger.info(
+                    f"We did not find {rank} in the taxonomy of {hit.query_id} which has subject taxid of {hit.subject_taxid}")
+                continue
+            if not hit.subject_taxonomy[rank]:
+                logger.warning(
+                    f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {rank}")
+                continue
+
+            if isinstance(hit.subject_taxonomy[rank], tuple):
                 # Log the first time we see each rank name
-                if hit.subject_rank_name not in reported_hits:
-                    logger.info(f"Found a hit for {hit.query_id} at rank {self.rank}: {hit.subject_rank_name} ({hit.subject_rank_tid})")
-                    reported_hits.add(hit.subject_rank_name)
+                if hit.subject_taxonomy[rank][1] not in reported_hits:
+                    logger.info(f"Found a hit for {hit.query_id} at rank {rank}: {hit.subject_taxonomy[rank][1]} ({hit.subject_taxonomy[rank][0]})")
+                    reported_hits.add(hit.subject_taxonomy[rank][1])
                 # Add all hits with taxonomic information to rank_groups
-                rank_groups[hit.subject_rank_tid].append(hit)
-            elif not hit.subject_rank_tid:
-                logger.warning(f"Hit {hit.subject_id} for query {hit.query_id} has no taxonomic information at rank {self.rank}")
+                rank_groups[hit.subject_taxonomy[rank][1]].append(hit)
+            else:
+                logger.warning(f"Not really sure what {hit.subject_taxonomy[rank]} of type {type(hit.subject_taxonomy[rank])} is supposed to be")
         
         # Select best representative from each rank
         representatives = []
@@ -163,7 +161,7 @@ class TaxonomyExtractor:
             representatives.extend(rank_hits[:max_per_rank])
         
         logger.info(
-            f"Selected {len(representatives)} representative sequences from {len(hits)} hits at rank '{self.rank}'"
+            f"Selected {len(representatives)} representative sequences from {len(hits)} hits at rank '{rank}'"
         )
         
         return representatives
@@ -273,7 +271,7 @@ class SequenceExtractor:
             logger.error("Sequence extraction timed out")
             return False
         except Exception as e:
-            logger.error(f"Error extracting sequences: {e}")
+            logger.error(f"Error extracting sequences (taxonomy): {e}")
             return False
         finally:
             # Clean up temporary ID file
@@ -347,8 +345,7 @@ def rewrite_blast_hits(
         "query_length", "subject_length", "query_start", "query_end",
         "subject_start", "subject_end", "evalue", "bit_score",
         "query_coverage", "subject_taxid", "subject_taxids",
-        "subject_rank_tid", "subject_rank_name",
-        "subject_group_tid", "subject_group_name",
+        "subject_taxonomy"
     ]
 
     with open(output_file, 'w') as out:
@@ -371,7 +368,6 @@ def process_blast_results_for_taxonomy(
     blast_hits: List[BlastHit],
     output_dir: Path,
     rank: str = "genus",
-    group_rank: str = "class",
     database: str = "core_nt",
     blastdb_path: Optional[Path] = None
 ) -> Dict[str, Optional[Path]]:
@@ -392,32 +388,17 @@ def process_blast_results_for_taxonomy(
     VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     if rank not in VALID_RANKS:
         raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-    if group_rank not in VALID_RANKS:
-        raise ValueError(f"Grouping Rank: {group_rank} is not a valid rank. It must be one of: {VALID_RANKS}")
-    
-    tax_extractor = TaxonomyExtractor(rank, group_rank)
+
+    tax_extractor = TaxonomyExtractor()
     seq_extractor = SequenceExtractor(blastdb_path)
     
     # get all the taxonomies
     subject_taxids = {hit.subject_taxid for hit in blast_hits}
-    taxonomies, groups = tax_extractor.parse_taxids(list(subject_taxids))
+    tax_dict = tax_extractor.parse_taxids(list(subject_taxids))
 
     # add all the ranks to all the hits
     for h in blast_hits:
-        tax_info = taxonomies.get(h.subject_taxid)
-        if isinstance(tax_info, (list, tuple)) and len(tax_info) >= 2:
-            h.subject_rank_tid = tax_info[0]
-            h.subject_rank_name = tax_info[1]
-        else:
-            h.subject_rank_tid = None
-            h.subject_rank_name = None
-        group_info = groups.get(h.subject_taxid)
-        if isinstance(group_info, (list, tuple)) and len(group_info) >= 2:
-            h.subject_group_tid = group_info[0]
-            h.subject_group_name = group_info[1]
-        else:
-            h.subject_group_tid = None
-            h.subject_group_name = None
+        h.subject_taxonomy = tax_dict.get(h.subject_taxid)
 
     # Group hits by query
     grouped_hits = tax_extractor.group_hits_by_query(blast_hits)
@@ -435,6 +416,7 @@ def process_blast_results_for_taxonomy(
         # Select representatives, preferring previously selected ones
         representatives = tax_extractor.select_representatives_by_rank(
             hits=query_hits,
+            rank=rank,
             preferred_representatives=preferred_representatives
         )
         if len(representatives) == 0:
@@ -443,9 +425,9 @@ def process_blast_results_for_taxonomy(
         
         # Update the preferred representatives with newly selected ones
         for rep in representatives:
-            if rep.subject_rank_tid and rep.subject_rank_tid not in preferred_representatives:
-                preferred_representatives[rep.subject_rank_tid] = rep.subject_id
-                logger.info(f"Recording {rep.subject_id} as representative for rank {rep.subject_rank_tid}")
+            if isinstance(rep.subject_taxonomy[rank], tuple) and rep.subject_taxonomy[rank][1] not in preferred_representatives:
+                preferred_representatives[rep.subject_taxonomy[rank][1]] = rep.subject_id
+                logger.info(f"Recording {rep.subject_id} as representative for rank {rep.subject_taxonomy[rank][1]}")
         
         # Create query-specific output directory
         query_output_dir = output_dir / query_id.replace('|', '_').replace('/', '_')

@@ -6,12 +6,15 @@ aligning sequences using MAFFT, and building phylogenetic trees using IQTree.
 """
 
 import os
+import sys
 import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
+from collections import defaultdict
 
 from .blast_analysis import BlastHit, FastaReader
+from .taxonomy import SequenceExtractor
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -63,7 +66,8 @@ class SequenceTrimmer:
         fasta_path: Path,
         blast_hits: List[BlastHit],
         output_fasta: Path,
-        query_id: str
+        query_id: str,
+        taxonomic_rank: str
     ) -> bool:
         """
         Trim sequences in a FASTA file based on BLAST hit coordinates.
@@ -76,7 +80,8 @@ class SequenceTrimmer:
             blast_hits: List of BlastHit objects for this query
             output_fasta: Path to output FASTA file with trimmed sequences
             query_id: The query sequence ID to include in output
-            
+            taxonomic_rank: the taxonomic rank to use for taxonomic labels (e.g., "genus")
+
         Returns:
             True if successful, False otherwise
         """
@@ -122,8 +127,8 @@ class SequenceTrimmer:
                     
                     # Write trimmed sequence with taxonomic information in header
                     header = seq_id
-                    if hit.subject_rank_name:
-                        header = f"{seq_id} {hit.subject_rank_name}"
+                    if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
+                        header = f"{seq_id} {hit.subject_taxonomy[taxonomic_rank][1]}"
                     
                     out.write(f">{header}\n")
                     # Write sequence in lines of 60 characters
@@ -269,7 +274,6 @@ class IQTreeBuilder:
     def build_tree(
         alignment_fasta: Path,
         output_prefix: Path,
-        num_threads: int = 1,
         model: str = "MFP"
     ) -> bool:
         """
@@ -278,7 +282,6 @@ class IQTreeBuilder:
         Args:
             alignment_fasta: Path to aligned FASTA file
             output_prefix: Prefix for output files
-            num_threads: Number of threads to use
             model: Substitution model (default: "MFP" for automatic ModelFinder Plus selection)
             
         Returns:
@@ -299,7 +302,7 @@ class IQTreeBuilder:
             '-s', str(alignment_fasta),
             '-pre', str(output_prefix),
             '-m', model,
-            '-T', str(num_threads)
+            '-T', "AUTO"
         ]
         
         logger.info(f"Running IQTree: {' '.join(cmd)}")
@@ -309,7 +312,7 @@ class IQTreeBuilder:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout
+                timeout=7200  # 2 hour timeout (increased from 1 hour to handle larger datasets)
             )
             
             if result.returncode != 0:
@@ -337,7 +340,7 @@ class IQTreeBuilder:
         tree_file: Path,
         blast_hits: List[BlastHit],
         output_tree: Path,
-        label_field: str = "subject_rank_name"
+        taxonomic_rank: str,
     ) -> bool:
         """
         Relabel tree nodes with taxonomic names.
@@ -349,7 +352,7 @@ class IQTreeBuilder:
             tree_file: Path to input tree file (Newick format)
             blast_hits: List of BlastHit objects with taxonomic information
             output_tree: Path to output tree file with relabeled nodes
-            label_field: Field from BlastHit to use for labels (default: "subject_rank_name")
+            taxonomic_rank: the taxonomic rank to use for relabeling (e.g., "genus")
             
         Returns:
             True if successful, False otherwise
@@ -359,7 +362,10 @@ class IQTreeBuilder:
             # Trees will have accessions (e.g., MZ387488.1) not full IDs
             label_map = {}
             for hit in blast_hits:
-                label = getattr(hit, label_field, None)
+                label = "unknown"
+                if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
+                    label = hit.subject_taxonomy[taxonomic_rank][1]
+                label_map[hit.subject_id] = label
                 if label:
                     # Clean up the label for tree format (Newick format constraints)
                     # Replace spaces, colons, parentheses, commas, and semicolons
@@ -372,11 +378,7 @@ class IQTreeBuilder:
                     # Use accession for mapping since that's what appears in trees
                     accession = hit.get_accession()
                     label_map[accession] = clean_label
-                    # Also handle potential header prefixes from trimmed files
-                    if hit.subject_rank_name:
-                        header_with_tax = f"{accession} {hit.subject_rank_name}"
-                        label_map[header_with_tax] = clean_label
-            
+
             # Read the tree file
             with open(tree_file, 'r') as f:
                 tree_string = f.read()
@@ -406,6 +408,7 @@ def process_query_alignment_and_tree(
     query_dir: Path,
     blast_hits: List[BlastHit],
     query_fasta: Path,
+    taxonomic_rank: str,
     num_threads: int = 1
 ) -> Dict[str, Optional[Path]]:
     """
@@ -416,6 +419,7 @@ def process_query_alignment_and_tree(
         query_dir: Directory containing query-specific files
         blast_hits: List of BlastHit objects for this query (with taxonomy info)
         query_fasta: Path to original query FASTA file
+        taxonomic_rank: The taxonomic rank to use for relabeling the tree
         num_threads: Number of threads to use
         
     Returns:
@@ -478,6 +482,7 @@ def process_query_alignment_and_tree(
         fasta_path=combined_fasta,
         blast_hits=blast_hits,
         output_fasta=trimmed_fasta,
+        taxonomic_rank=taxonomic_rank,
         query_id=query_id
     ):
         results['trimmed_fasta'] = trimmed_fasta
@@ -505,7 +510,6 @@ def process_query_alignment_and_tree(
     if IQTreeBuilder.build_tree(
         alignment_fasta=alignment_fasta,
         output_prefix=tree_prefix,
-        num_threads=num_threads
     ):
         results['tree'] = tree_file
         logger.info(f"Tree saved to: {tree_file}")
@@ -518,11 +522,421 @@ def process_query_alignment_and_tree(
     if IQTreeBuilder.relabel_tree_with_taxonomy(
         tree_file=tree_file,
         blast_hits=blast_hits,
-        output_tree=labeled_tree
+        output_tree=labeled_tree,
+        taxonomic_rank=taxonomic_rank
     ):
         results['labeled_tree'] = labeled_tree
         logger.info(f"Labeled tree saved to: {labeled_tree}")
     else:
         logger.warning(f"Failed to relabel tree for {query_id}, but unlabeled tree is available")
+    
+    return results
+
+
+def check_alignment_consistency(blast_hits: List[BlastHit], tolerance: int = 50) -> Dict[str, bool]:
+    """
+    Check if BLAST hits align to similar locations on reference sequences.
+    
+    For each reference sequence that appears in multiple hits, check if the alignment
+    coordinates are consistent (within tolerance).
+    
+    Args:
+        blast_hits: List of BlastHit objects to check
+        tolerance: Maximum allowed difference in coordinates (default: 50 bp)
+        
+    Returns:
+        Dictionary mapping subject_id to consistency status (True if consistent)
+    """
+    # Group hits by subject sequence
+    hits_by_subject = defaultdict(list)
+    for hit in blast_hits:
+        hits_by_subject[hit.subject_id].append(hit)
+    
+    consistency_status = {}
+    
+    for subject_id, subject_hits in hits_by_subject.items():
+        if len(subject_hits) == 1:
+            # Only one hit, so it's consistent by definition
+            consistency_status[subject_id] = True
+            continue
+        
+        # Check if all hits have similar start and end coordinates
+        starts = [hit.subject_start for hit in subject_hits]
+        ends = [hit.subject_end for hit in subject_hits]
+        
+        start_range = max(starts) - min(starts)
+        end_range = max(ends) - min(ends)
+        
+        is_consistent = start_range <= tolerance and end_range <= tolerance
+        consistency_status[subject_id] = is_consistent
+        
+        if not is_consistent:
+            logger.warning(
+                f"Subject {subject_id} has inconsistent alignments: "
+                f"start range={start_range}, end range={end_range}"
+            )
+        else:
+            logger.info(
+                f"Subject {subject_id} has consistent alignments across {len(subject_hits)} hits"
+            )
+    
+    return consistency_status
+
+
+def group_hits_by_group_rank(
+    blast_hits: List[BlastHit],
+    group_rank: str,
+) -> Dict[str, Dict[str, List[BlastHit]]]:
+    """
+    Group BLAST hits by group_rank across all queries.
+    
+    Args:
+        blast_hits: List of BlastHit objects with group taxonomy information
+        
+    Returns:
+        Dictionary mapping group_rank_name (taxonomy name) to another dict mapping
+        query_id to list of hits.
+        Format: {group_rank_name: {query_id: [hits]}}
+    """
+    grouped = defaultdict(lambda: defaultdict(list))
+    
+    for hit in blast_hits:
+        if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
+            grouped[hit.subject_taxonomy[group_rank][1]][hit.query_id].append(hit)
+        else:
+            logger.warning(
+                f"Hit {hit.subject_id} for query {hit.query_id} has no group taxonomy information"
+            )
+    
+    logger.info(f"Grouped hits into {len(grouped)} taxonomic groups")
+    for group_name, queries in grouped.items():
+        logger.info(
+            f"  Group {group_name}: {len(queries)} queries, "
+            f"{sum(len(hits) for hits in queries.values())} total hits"
+        )
+    
+    return dict(grouped)
+
+
+def create_grouped_fasta_with_queries(
+    group_tid: str,
+    group_name: str,
+    query_hits_map: Dict[str, List[BlastHit]],
+    labeling_rank: str,
+    query_fasta: Path,
+    output_fasta: Path,
+    database: str = "core_nt",
+    blastdb_path: Optional[Path] = None
+) -> bool:
+    """
+    Create a FASTA file for a taxonomic group containing all queries and unique references.
+    
+    Args:
+        group_tid: Taxonomy ID of the group
+        group_name: Name of the taxonomic group
+        query_hits_map: Dictionary mapping query_id to list of BlastHit objects
+        labeling_rank: Taxonomic rank to use for labeling (e.g., "genus")
+        query_fasta: Path to original query FASTA file
+        output_fasta: Path to output grouped FASTA file
+        database: Name of BLAST database
+        blastdb_path: Path to BLAST database directory
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info(f"Creating grouped FASTA for {group_name} ({group_tid})")
+    
+    # Read all query sequences
+    try:
+        query_sequences = FastaReader.read_fasta(query_fasta)
+    except Exception as e:
+        logger.error(f"Error reading query FASTA: {e}")
+        return False
+    
+    # Collect unique reference sequences (by labeling rank) so we only get one example
+    # For each unique reference, keep the hit with the best bit score
+    unique_references = {}
+    unique_labels = {}
+    for query_id, hits in query_hits_map.items():
+        for hit in hits:
+            label = hit.subject_id
+            if isinstance(hit.subject_taxonomy, dict) and labeling_rank in hit.subject_taxonomy:
+                label = hit.subject_taxonomy[labeling_rank][1]
+            if label not in unique_labels:
+                unique_labels[label] = hit
+                unique_references[hit.subject_id] = hit
+            else:
+                # Keep the hit with better bit score
+                if hit.bit_score > unique_labels[label].bit_score:
+                    # Remove the old reference for this label, if present
+                    old_hit = unique_labels[label]
+                    old_subject_id = old_hit.subject_id
+                    if old_subject_id in unique_references:
+                        del unique_references[old_subject_id]
+                    # Add the new, better-scoring hit
+                    unique_references[hit.subject_id] = hit
+                    unique_labels[label] = hit
+
+    logger.info(f"Found {len(unique_references)} unique reference sequences")
+    unique_label_keys = list(unique_labels.keys())
+    logger.info(
+        "Unique labels: count=%d, example_labels=%s",
+        len(unique_labels),
+        unique_label_keys[:10],
+    )
+    
+    # Extract reference sequences
+    seq_extractor = SequenceExtractor(blastdb_path)
+    temp_ref_fasta = output_fasta.parent / f"{output_fasta.stem}_temp_refs.fasta"
+    
+    try:
+        success = seq_extractor.extract_sequences(
+            sequence_ids=list(unique_references.keys()),
+            output_fasta=temp_ref_fasta,
+            database=database
+        )
+        
+        if not success:
+            logger.error("Failed to extract reference sequences")
+            sys.exit(1)
+        
+        # Read extracted references
+        ref_sequences = FastaReader.read_fasta(temp_ref_fasta)
+        
+        # Write combined FASTA file
+        with open(output_fasta, 'w') as out:
+            # Write all query sequences first
+            for query_id in query_hits_map.keys():
+                if query_id in query_sequences:
+                    query_seq = query_sequences[query_id]
+                    out.write(f">{query_id}\n")
+                    for i in range(0, len(query_seq), 60):
+                        out.write(query_seq[i:i+60] + "\n")
+                    logger.info(f"Added query {query_id} ({len(query_seq)} bp)")
+                else:
+                    logger.warning(f"Query {query_id} not found in query FASTA file, skipping")
+            
+            # Write reference sequences with taxonomic labels
+            for subject_id, hit in unique_references.items():
+                # Get accession for lookup
+                accession = hit.get_accession()
+                if accession in ref_sequences:
+                    ref_seq = ref_sequences[accession]
+                    header = accession
+                    if isinstance(hit.subject_taxonomy, dict) and labeling_rank in hit.subject_taxonomy:
+                        header = f"{accession} {hit.subject_taxonomy[labeling_rank][1]}"
+                    
+                    out.write(f">{header}\n")
+                    for i in range(0, len(ref_seq), 60):
+                        out.write(ref_seq[i:i+60] + "\n")
+                    logger.info(f"Added reference {accession} ({len(ref_seq)} bp)")
+                else:
+                    logger.warning(f"Reference {accession} not found in extracted sequences, skipping")
+        
+        logger.info(f"Created grouped FASTA file: {output_fasta}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating grouped FASTA: {e}")
+        return False
+    finally:
+        # Clean up temporary file
+        if temp_ref_fasta.exists():
+            temp_ref_fasta.unlink()
+
+
+def trim_grouped_sequences(
+    input_fasta: Path,
+    blast_hits: List[BlastHit],
+    output_fasta: Path,
+    query_ids: List[str]
+) -> bool:
+    """
+    Trim sequences in a grouped FASTA file based on BLAST hit coordinates.
+    
+    This is similar to trim_sequences_from_blast_hits but handles multiple queries.
+    
+    Args:
+        input_fasta: Path to input FASTA file with full-length sequences
+        blast_hits: List of BlastHit objects for all queries in the group
+        output_fasta: Path to output FASTA file with trimmed sequences
+        query_ids: List of query sequence IDs to include (untrimmed)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Read all sequences from the input FASTA
+        sequences = FastaReader.read_fasta(input_fasta)
+        
+        # Create a mapping of subject accession to blast hits
+        hit_map = {}
+        for hit in blast_hits:
+            accession = hit.get_accession()
+            if accession not in hit_map:
+                hit_map[accession] = []
+            hit_map[accession].append(hit)
+        
+        # For sequences with multiple hits, use the one with the best bit score
+        # This is consistent with the deduplication logic in create_grouped_fasta_with_queries
+        best_hits = {}
+        for accession, hits in hit_map.items():
+            if len(hits) == 1:
+                best_hits[accession] = hits[0]
+            else:
+                # Use the hit with the best bit score for consistency
+                best_hits[accession] = max(hits, key=lambda h: h.bit_score)
+        
+        # Open output file
+        with open(output_fasta, 'w') as out:
+            # First, write all query sequences (untrimmed)
+            for query_id in query_ids:
+                if query_id in sequences:
+                    query_seq = sequences[query_id]
+                    out.write(f">{query_id}\n")
+                    for i in range(0, len(query_seq), 60):
+                        out.write(query_seq[i:i+60] + "\n")
+                    logger.info(f"Added query sequence {query_id} ({len(query_seq)} bp)")
+            
+            # Now process subject sequences (trimmed)
+            for seq_id, sequence in sequences.items():
+                if seq_id in query_ids:
+                    continue  # Skip queries, already written
+                
+                # Extract just the accession from the header (might have taxonomy info)
+                accession = seq_id.split()[0]
+                hit = best_hits.get(accession)
+                
+                if hit is None:
+                    logger.error(f"No BLAST hit found for sequence {accession}, data consistency issue")
+                    continue
+                
+                # Trim the sequence based on subject coordinates
+                trimmed_seq = SequenceTrimmer.trim_sequence_by_coordinates(
+                    sequence,
+                    hit.subject_start,
+                    hit.subject_end
+                )
+                
+                # Write trimmed sequence
+                out.write(f">{seq_id}\n")
+                for i in range(0, len(trimmed_seq), 60):
+                    out.write(trimmed_seq[i:i+60] + "\n")
+                
+                logger.info(
+                    f"Trimmed {accession} from {len(sequence)} bp to {len(trimmed_seq)} bp "
+                    f"(coords: {hit.subject_start}-{hit.subject_end})"
+                )
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error trimming grouped sequences: {e}")
+        return False
+
+
+def process_grouped_alignment_and_tree(
+    group_name: str,
+    group_dir: Path,
+    taxonomic_rank: str,
+    blast_hits: List[BlastHit],
+    query_ids: List[str],
+    num_threads: int = 1
+) -> Dict[str, Optional[Path]]:
+    """
+    Complete pipeline for a taxonomic group: trim, align, and build tree.
+    
+    Args:
+        group_name: The name of the group, used for file naming
+        group_dir: Directory containing group-specific files
+        taxonomic_rank: Taxonomic rank to use for labeling the tree
+        blast_hits: List of BlastHit objects for all queries in the group
+        query_ids: List of query sequence IDs in this group
+        num_threads: Number of threads to use
+        
+    Returns:
+        Dictionary with paths to generated files:
+            - 'combined_fasta': Combined sequences (queries + references)
+            - 'trimmed_fasta': Trimmed sequences
+            - 'alignment': Aligned sequences
+            - 'tree': Phylogenetic tree
+            - 'labeled_tree': Tree with taxonomic labels
+    """
+    results = {
+        'combined_fasta': None,
+        'trimmed_fasta': None,
+        'alignment': None,
+        'tree': None,
+        'labeled_tree': None
+    }
+
+    # File paths
+    safe_group_name = group_name.replace(' ', '_').replace('/', '_').replace('|', '_')
+    combined_fasta = group_dir / f"{safe_group_name}_combined.fasta"
+    trimmed_fasta = group_dir / f"{safe_group_name}_trimmed.fasta"
+    alignment_fasta = group_dir / f"{safe_group_name}_aligned.fasta"
+    tree_prefix = group_dir / f"{safe_group_name}_tree"
+    tree_file = Path(str(tree_prefix) + ".treefile")
+    labeled_tree = group_dir / f"{safe_group_name}_tree_labeled.treefile"
+    
+    # Check if combined FASTA exists
+    if not combined_fasta.exists():
+        logger.error(f"Combined FASTA file not found: {combined_fasta}")
+        return results
+    
+    results['combined_fasta'] = combined_fasta
+    
+    # Step 1: Trim sequences based on BLAST coordinates
+    logger.info(f"Trimming sequences for group {group_name}...")
+    if trim_grouped_sequences(
+        input_fasta=combined_fasta,
+        blast_hits=blast_hits,
+        output_fasta=trimmed_fasta,
+        query_ids=query_ids
+    ):
+        results['trimmed_fasta'] = trimmed_fasta
+        logger.info(f"Trimmed sequences saved to: {trimmed_fasta}")
+    else:
+        logger.error(f"Failed to trim sequences for group {group_name}")
+        return results
+    
+    # Step 2: Align sequences with MAFFT
+    logger.info(f"Aligning sequences for group {group_name}...")
+    if MAFFTAligner.align_sequences(
+        input_fasta=trimmed_fasta,
+        output_fasta=alignment_fasta,
+        auto_orient=True,
+        num_threads=num_threads
+    ):
+        results['alignment'] = alignment_fasta
+        logger.info(f"Alignment saved to: {alignment_fasta}")
+    else:
+        logger.error(f"Failed to align sequences for group {group_name}")
+        return results
+    
+    # Step 3: Build phylogenetic tree with IQTree
+    logger.info(f"Building phylogenetic tree for group {group_name}...")
+    if IQTreeBuilder.build_tree(
+        alignment_fasta=alignment_fasta,
+        output_prefix=tree_prefix,
+    ):
+        results['tree'] = tree_file
+        logger.info(f"Tree saved to: {tree_file}")
+    else:
+        logger.error(f"Failed to build tree for group {group_name}")
+        return results
+    
+    # Step 4: Relabel tree with taxonomic names
+    logger.info(f"Relabeling tree with taxonomic names for group {group_name}...")
+    if IQTreeBuilder.relabel_tree_with_taxonomy(
+        tree_file=tree_file,
+        blast_hits=blast_hits,
+        output_tree=labeled_tree,
+        taxonomic_rank=taxonomic_rank
+    ):
+        results['labeled_tree'] = labeled_tree
+        logger.info(f"Labeled tree saved to: {labeled_tree}")
+    else:
+        logger.warning(f"Failed to relabel tree for group {group_name}, but unlabeled tree is available")
     
     return results

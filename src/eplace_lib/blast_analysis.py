@@ -8,7 +8,7 @@ based on sequence identity and coverage criteria.
 import os
 import subprocess
 import logging
-from typing import Optional
+from typing import Optional, Dict, Tuple
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -35,12 +35,7 @@ class BlastHit:
         evalue: Expectation value
         bit_score: Bit score
         query_coverage: Percentage of query covered by alignment
-        subject_taxid: the subject's taxonomy id
-        subject_taxids: blast should give a ; separated list of the hierarchy
-        subject_rank_tid: the subjects taxonomy ID at our rank
-        subject_rank_name: the subjects taxonomy name at our rank
-        subject_group_tid: the taxonomy ID of the subject's taxon at the group rank (taxonomic rank for grouping)
-        subject_group_name: the name of the subject's taxon at the group rank (taxonomic rank for grouping)
+        subject_taxonomy: The subjects taxonomy information. A dictionary with rank as key and a tuple of (taxid, name) as value.
     """
     query_id: str
     subject_id: str
@@ -57,10 +52,27 @@ class BlastHit:
     query_coverage: float
     subject_taxid: str
     subject_taxids: str
-    subject_rank_tid: Optional[str] = None
-    subject_rank_name: Optional[str] = None
-    subject_group_tid: Optional[str] = None
-    subject_group_name: Optional[str] = None
+    subject_taxonomy: Optional[Dict[str, Tuple[str, str]]] = None
+
+    def get_subject_taxonomy(self, rank: str) -> Optional[tuple[str, str]]:
+        """
+        Return the taxonomy information as a tuple of (taxid, name) for the given rank.
+        If the rank is not found, return None.
+
+        Args:
+            rank: The rank to return the taxonomy information for.
+        Returns:
+            tuple of (taxid, name) for the given rank, or None if the rank is not found.
+        """
+
+        if not self.subject_taxonomy:
+            logger.warning("Taxonomy information is not available. Please parse it before calling this function.")
+            return None
+
+        if rank in self.subject_taxonomy:
+            return self.subject_taxonomy[rank]
+        else:
+            return None
     
     def get_accession(self) -> str:
         """
