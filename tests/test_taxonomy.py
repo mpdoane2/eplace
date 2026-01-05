@@ -17,7 +17,8 @@ from eplace_lib.taxonomy import (
     TaxonomyExtractor,
     SequenceExtractor,
     process_blast_results_for_taxonomy,
-    rewrite_blast_hits
+    rewrite_blast_hits,
+    generate_classification_summary
 )
 from eplace_lib.blast_analysis import BlastHit
 
@@ -947,4 +948,249 @@ class TestRewriteBlastHits:
             data2 = lines[2].strip().split('\t')
             assert data2[0] == "seq2"
             assert data2[15] == str(self.human_taxonomy)
+
+
+class TestGenerateClassificationSummary:
+    """Test cases for generate_classification_summary function."""
+    
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+        self.pan_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9596', 'Pan'),
+            'species': ('9597', 'Pan paniscus')
+        }
+    
+    def test_generate_classification_summary_basic(self):
+        """Test generating basic classification summary."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1', subject_id='gi|156763568|gb|EU014687.1|',
+                    percent_identity=100.0, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=1432,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998,
+                    query_coverage=100,
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
+                ),
+                BlastHit(
+                    query_id='seq2', subject_id='gi|34190046|gb|BC014593.2|',
+                    percent_identity=100.0, 
+                    alignment_length=420,
+                    query_length=420,
+                    subject_length=784,
+                    query_start=1, 
+                    query_end=420,
+                    subject_start=1,
+                    subject_end=420,
+                    evalue=0.0,
+                    bit_score=776,
+                    query_coverage=100,
+                    subject_taxid="9606",
+                    subject_taxids="9606",
+                    subject_taxonomy=self.human_taxonomy
+                )
+            ]
+            
+            result = generate_classification_summary(
+                blast_hits=hits,
+                output_file=output_file,
+                rank='genus',
+                group_rank='class',
+                tree_label_rank='family'
+            )
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Should have header + 2 data lines
+            assert len(lines) == 3
+            
+            # Check header
+            header = lines[0].strip().split('\t')
+            assert 'query_id' in header
+            assert 'classification_name' in header
+            assert 'group_name' in header
+            assert 'tree_label_name' in header
+            assert 'appears_in_multiple_groups' in header
+            assert 'has_classification' in header
+            
+            # Check seq1 data
+            data1 = lines[1].strip().split('\t')
+            assert data1[0] == 'seq1'
+            assert 'Salmonella' in data1[3]  # classification_name
+            assert 'Gammaproteobacteria' in data1[6]  # group_name
+            assert 'Enterobacteriaceae' in data1[9]  # tree_label_name
+            assert data1[10] == 'No'  # appears_in_multiple_groups
+            assert data1[11] == 'Yes'  # has_classification
+            
+            # Check seq2 data
+            data2 = lines[2].strip().split('\t')
+            assert data2[0] == 'seq2'
+            assert 'Homo' in data2[3]  # classification_name
+            assert 'Mammalia' in data2[6]  # group_name
+            assert 'Hominidae' in data2[9]  # tree_label_name
+    
+    def test_generate_classification_summary_multiple_groups(self):
+        """Test detecting sequences appearing in multiple groups."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            # Create hits where one query has multiple hits from different classes
+            hits = [
+                BlastHit(
+                    query_id='seq1', subject_id='hit1',
+                    percent_identity=95.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=900,
+                    query_coverage=100,
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
+                ),
+                BlastHit(
+                    query_id='seq1', subject_id='hit2',
+                    percent_identity=93.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=850,
+                    query_coverage=100,
+                    subject_taxid="9606",
+                    subject_taxids="9606",
+                    subject_taxonomy=self.human_taxonomy
+                )
+            ]
+            
+            result = generate_classification_summary(
+                blast_hits=hits,
+                output_file=output_file,
+                rank='genus',
+                group_rank='class',
+                tree_label_rank='genus'
+            )
+            
+            assert result is True
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Should have header + 1 data line
+            assert len(lines) == 2
+            
+            # Check data
+            data = lines[1].strip().split('\t')
+            assert data[0] == 'seq1'
+            assert data[10] == 'Yes'  # appears_in_multiple_groups
+            # Group name should contain both classes
+            assert 'Gammaproteobacteria' in data[6] and 'Mammalia' in data[6]
+    
+    def test_generate_classification_summary_no_classification(self):
+        """Test handling sequences with no hits."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            # Empty hits list
+            hits = []
+            
+            result = generate_classification_summary(
+                blast_hits=hits,
+                output_file=output_file,
+                rank='genus',
+                group_rank='class',
+                tree_label_rank='genus'
+            )
+            
+            assert result is True
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Should only have header
+            assert len(lines) == 1
+    
+    def test_generate_classification_summary_invalid_rank(self):
+        """Test with invalid taxonomic rank."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1', subject_id='hit1',
+                    percent_identity=95.0, 
+                    alignment_length=500,
+                    query_length=500,
+                    subject_length=1000,
+                    query_start=1, 
+                    query_end=500,
+                    subject_start=1,
+                    subject_end=500,
+                    evalue=0.0,
+                    bit_score=900,
+                    query_coverage=100,
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
+                )
+            ]
+            
+            result = generate_classification_summary(
+                blast_hits=hits,
+                output_file=output_file,
+                rank='invalid_rank',
+                group_rank='class',
+                tree_label_rank='genus'
+            )
+            
+            assert result is False
 
