@@ -443,3 +443,167 @@ def process_blast_results_for_taxonomy(
         results[query_id] = output_fasta
     
     return results
+
+
+def generate_classification_summary(
+    blast_hits: List[BlastHit],
+    output_file: Path,
+    rank: str = "genus",
+    group_rank: str = "class",
+    tree_label_rank: str = "genus"
+) -> bool:
+    """
+    Generate a classification summary TSV file for each query sequence.
+    
+    This function creates a TSV file that reports:
+    - Query sequence ID
+    - Closest organism at the classification rank (--rank)
+    - Closest organism at the grouping rank (--group-rank)
+    - Closest organism at the tree labeling rank (--tree-label-rank)
+    - Whether the sequence appears in multiple groups
+    - Whether the sequence has no appropriate classification
+    
+    Args:
+        blast_hits: List of BlastHit objects with taxonomy information
+        output_file: Path to output TSV file
+        rank: Taxonomic rank for classification (default: genus)
+        group_rank: Taxonomic rank for grouping (default: class)
+        tree_label_rank: Taxonomic rank for tree labeling (default: genus)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info(f"Generating classification summary TSV to {output_file}")
+    
+    # Validate ranks
+    VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+    for r, r_name in [(rank, 'rank'), (group_rank, 'group_rank'), (tree_label_rank, 'tree_label_rank')]:
+        if r not in VALID_RANKS:
+            logger.error(f"{r_name}: {r} is not a valid rank. It must be one of: {VALID_RANKS}")
+            return False
+    
+    # Group hits by query
+    query_hits_map = defaultdict(list)
+    for hit in blast_hits:
+        query_hits_map[hit.query_id].append(hit)
+    
+    # Collect all query IDs that were searched
+    all_query_ids = set(query_hits_map.keys())
+    
+    # Prepare data for each query
+    summary_data = []
+    
+    for query_id in sorted(all_query_ids):
+        query_hits = query_hits_map.get(query_id, [])
+        
+        # Initialize classification info
+        classification = {
+            'query_id': query_id,
+            'classification_rank': rank,
+            'classification_taxid': 'N/A',
+            'classification_name': 'N/A',
+            'group_rank': group_rank,
+            'group_taxid': 'N/A',
+            'group_name': 'N/A',
+            'tree_label_rank': tree_label_rank,
+            'tree_label_taxid': 'N/A',
+            'tree_label_name': 'N/A',
+            'appears_in_multiple_groups': 'No',
+            'has_classification': 'Yes'
+        }
+        
+        if not query_hits:
+            # No hits for this query
+            classification['has_classification'] = 'No'
+            summary_data.append(classification)
+            continue
+        
+        # Find the best hit (highest bit score) for each rank
+        best_hit = max(query_hits, key=lambda h: h.bit_score)
+        
+        # Extract closest organism at classification rank
+        if best_hit.subject_taxonomy and rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[rank]
+            classification['classification_taxid'] = taxid
+            classification['classification_name'] = name
+        else:
+            classification['has_classification'] = 'No'
+        
+        # Extract closest organism at group rank
+        if best_hit.subject_taxonomy and group_rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[group_rank]
+            classification['group_taxid'] = taxid
+            classification['group_name'] = name
+        else:
+            if classification['has_classification'] == 'Yes':
+                classification['has_classification'] = 'Partial'
+        
+        # Extract closest organism at tree label rank
+        if best_hit.subject_taxonomy and tree_label_rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[tree_label_rank]
+            classification['tree_label_taxid'] = taxid
+            classification['tree_label_name'] = name
+        else:
+            if classification['has_classification'] == 'Yes':
+                classification['has_classification'] = 'Partial'
+        
+        # Check if sequence appears in multiple groups
+        if group_rank in [rank, tree_label_rank] or all(
+            hit.subject_taxonomy and group_rank in hit.subject_taxonomy 
+            for hit in query_hits
+        ):
+            group_names = set()
+            for hit in query_hits:
+                if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
+                    group_names.add(hit.subject_taxonomy[group_rank][1])
+            
+            if len(group_names) > 1:
+                classification['appears_in_multiple_groups'] = 'Yes'
+                classification['group_name'] = '; '.join(sorted(group_names))
+        
+        summary_data.append(classification)
+    
+    # Write TSV file
+    try:
+        with open(output_file, 'w') as f:
+            # Write header
+            headers = [
+                'query_id',
+                'classification_rank',
+                'classification_taxid',
+                'classification_name',
+                'group_rank',
+                'group_taxid',
+                'group_name',
+                'tree_label_rank',
+                'tree_label_taxid',
+                'tree_label_name',
+                'appears_in_multiple_groups',
+                'has_classification'
+            ]
+            f.write('\t'.join(headers) + '\n')
+            
+            # Write data
+            for entry in summary_data:
+                row = [
+                    entry['query_id'],
+                    entry['classification_rank'],
+                    entry['classification_taxid'],
+                    entry['classification_name'],
+                    entry['group_rank'],
+                    entry['group_taxid'],
+                    entry['group_name'],
+                    entry['tree_label_rank'],
+                    entry['tree_label_taxid'],
+                    entry['tree_label_name'],
+                    entry['appears_in_multiple_groups'],
+                    entry['has_classification']
+                ]
+                f.write('\t'.join(row) + '\n')
+        
+        logger.info(f"Successfully wrote classification summary for {len(summary_data)} queries to {output_file}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error writing classification summary TSV: {e}")
+        return False
