@@ -230,7 +230,7 @@ Notes:
         sys.exit(1)
     
     # Step 3: Process taxonomy information
-    logger.info(f"\n[Step 3/7] Processing taxonomy information (rank: {args.rank}, group_rank: {args.group_rank})...")
+    logger.info(f"\n[Step 3/7] Processing taxonomy information (rank: {args.rank})...")
     
     try:
         # This adds taxonomic information to the hits
@@ -318,7 +318,7 @@ Notes:
             group_tid=group_tid,
             group_name=group_name,
             query_hits_map=query_hits_map,
-            taxonomic_rank=args.rank,
+            labeling_rank=args.rank,
             query_fasta=args.query_fasta,
             output_fasta=combined_fasta,
             database=args.database,

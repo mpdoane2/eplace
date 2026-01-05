@@ -626,7 +626,7 @@ def create_grouped_fasta_with_queries(
     group_tid: str,
     group_name: str,
     query_hits_map: Dict[str, List[BlastHit]],
-    taxonomic_rank: str,
+    labeling_rank: str,
     query_fasta: Path,
     output_fasta: Path,
     database: str = "core_nt",
@@ -639,7 +639,7 @@ def create_grouped_fasta_with_queries(
         group_tid: Taxonomy ID of the group
         group_name: Name of the taxonomic group
         query_hits_map: Dictionary mapping query_id to list of BlastHit objects
-        taxonomic_rank: Taxonomic rank to use for grouping (e.g., "genus")
+        labeling_rank: Taxonomic rank to use for labeling (e.g., "genus")
         query_fasta: Path to original query FASTA file
         output_fasta: Path to output grouped FASTA file
         database: Name of BLAST database
@@ -657,17 +657,20 @@ def create_grouped_fasta_with_queries(
         logger.error(f"Error reading query FASTA: {e}")
         return False
     
-    # Collect unique reference sequences (by subject_id)
+    # Collect unique reference sequences (by labeling rank) so we only get one example
     # For each unique reference, keep the hit with the best bit score
     unique_references = {}
     for query_id, hits in query_hits_map.items():
         for hit in hits:
-            if hit.subject_id not in unique_references:
-                unique_references[hit.subject_id] = hit
+            label = hit.subject_id
+            if isinstance(hit.subject_taxonomy, dict) and labeling_rank in hit.subject_taxonomy:
+                label = hit.subject_taxonomy[labeling_rank]
+            if label not in unique_references:
+                unique_references[label] = hit
             else:
                 # Keep the hit with better bit score
-                if hit.bit_score > unique_references[hit.subject_id].bit_score:
-                    unique_references[hit.subject_id] = hit
+                if hit.bit_score > unique_references[label].bit_score:
+                    unique_references[label] = hit
     
     logger.info(f"Found {len(unique_references)} unique reference sequences")
     
@@ -709,8 +712,8 @@ def create_grouped_fasta_with_queries(
                 if accession in ref_sequences:
                     ref_seq = ref_sequences[accession]
                     header = accession
-                    if isinstance(hit.subject_taxonomy, dict) and taxonomic_rank in hit.subject_taxonomy:
-                        header = f"{accession} {hit.subject_taxonomy[taxonomic_rank][1]}"
+                    if isinstance(hit.subject_taxonomy, dict) and labeling_rank in hit.subject_taxonomy:
+                        header = f"{accession} {hit.subject_taxonomy[labeling_rank][1]}"
                     
                     out.write(f">{header}\n")
                     for i in range(0, len(ref_seq), 60):
