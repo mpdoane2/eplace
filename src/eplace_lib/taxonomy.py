@@ -517,6 +517,7 @@ def generate_classification_summary(
         # Initialize classification info
         classification = {
             'query_id': query_id,
+            'blast_hits': 0,
             'classification_rank': rank,
             'classification_taxid': 'N/A',
             'classification_name': 'N/A',
@@ -535,7 +536,9 @@ def generate_classification_summary(
             classification['has_classification'] = 'No'
             summary_data.append(classification)
             continue
-        
+
+        classification['blast_hits'] = len(query_hits)
+
         # Find the best hit (highest bit score) for each rank
         best_hit = max(query_hits, key=lambda h: h.bit_score)
         
@@ -598,6 +601,7 @@ def generate_classification_summary(
             # Write header
             headers = [
                 'query_id',
+                'blast_hits',
                 'classification_rank',
                 'classification_taxid',
                 'classification_name',
@@ -616,6 +620,7 @@ def generate_classification_summary(
             for entry in summary_data:
                 row = [
                     entry['query_id'],
+                    str(entry['blast_hits']),
                     entry['classification_rank'],
                     entry['classification_taxid'],
                     entry['classification_name'],

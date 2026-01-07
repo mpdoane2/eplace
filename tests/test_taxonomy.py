@@ -982,6 +982,7 @@ class TestGenerateClassificationSummary:
         """Helper method to get column indices from header row."""
         return {
             'query_id': header.index('query_id'),
+            'blast_hits': header.index('blast_hits'),
             'classification_name': header.index('classification_name'),
             'group_name': header.index('group_name'),
             'tree_label_name': header.index('tree_label_name'),
@@ -1050,12 +1051,13 @@ class TestGenerateClassificationSummary:
             with open(output_file, 'r') as f:
                 lines = f.readlines()
             
-            # Should have header + 2 data lines
+            # Should have header + 3 data lines
             assert len(lines) == 4
             
             # Check header and get column indices
             header = lines[0].strip().split('\t')
             assert 'query_id' in header
+            assert 'blast_hits' in header
             assert 'classification_name' in header
             assert 'group_name' in header
             assert 'tree_label_name' in header
@@ -1158,6 +1160,7 @@ class TestGenerateClassificationSummary:
             
             data = lines[1].strip().split('\t')
             assert data[col_idx['query_id']] == 'seq1'
+            assert data[col_idx['blast_hits']] == '2'
             assert data[col_idx['appears_in_multiple_groups']] == 'Yes'
             # Group name should be semicolon-separated and sorted
             group_names = data[col_idx['group_name']].split('; ')
