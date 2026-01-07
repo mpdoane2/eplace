@@ -952,7 +952,7 @@ class TestRewriteBlastHits:
 
 class TestGenerateClassificationSummary:
     """Test cases for generate_classification_summary function."""
-    
+
     def setup_method(self):
         self.salmonella_taxonomy = {
             'phylum': ('1224', 'Pseudomonadota'),
@@ -961,10 +961,11 @@ class TestGenerateClassificationSummary:
             'family': ('543', 'Enterobacteriaceae'),
             'genus': ('590', 'Salmonella')
         }
+        # in this test taxonomy we deliberartely delete order to confirm that 
+        # the missing taxonomies are handeled correctly
         self.human_taxonomy = {
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
-            'order': ('9443', 'Primates'),
             'family': ('9604', 'Hominidae'),
             'genus': ('9605', 'Homo'),
             'species': ('9606', 'Homo sapiens')
@@ -983,6 +984,7 @@ class TestGenerateClassificationSummary:
         return {
             'query_id': header.index('query_id'),
             'blast_hits': header.index('blast_hits'),
+            'taxonomy': header.index('taxonomy'),
             'classification_name': header.index('classification_name'),
             'group_name': header.index('group_name'),
             'tree_label_name': header.index('tree_label_name'),
@@ -1066,13 +1068,14 @@ class TestGenerateClassificationSummary:
             
             # Get column indices using helper method
             col_idx = self._get_column_indices(header)
-            
+
             # Check seq1 data
             data1 = lines[1].strip().split('\t')
             assert data1[col_idx['query_id']] == 'seq1'
             assert 'Salmonella' in data1[col_idx['classification_name']]
             assert 'Gammaproteobacteria' in data1[col_idx['group_name']]
             assert 'Enterobacteriaceae' in data1[col_idx['tree_label_name']]
+            assert data1[col_idx['taxonomy']] == 'Pseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella;'
             assert data1[col_idx['appears_in_multiple_groups']] == 'No'
             assert data1[col_idx['has_classification']] == 'Yes'
             
@@ -1082,6 +1085,7 @@ class TestGenerateClassificationSummary:
             assert 'Homo' in data2[col_idx['classification_name']]
             assert 'Mammalia' in data2[col_idx['group_name']]
             assert 'Hominidae' in data2[col_idx['tree_label_name']]
+            assert data2[col_idx['taxonomy']] == 'Chordata;Mammalia;;Hominidae;Homo;Homo sapiens'
             assert data2[col_idx['appears_in_multiple_groups']] == 'No'
             assert data2[col_idx['has_classification']] == 'Yes'
 
@@ -1090,6 +1094,7 @@ class TestGenerateClassificationSummary:
             assert 'N/A' in data3[col_idx['classification_name']]
             assert 'N/A' in data3[col_idx['group_name']]
             assert 'N/A' in data3[col_idx['tree_label_name']]
+            assert data3[col_idx['taxonomy']] == ';;;;;'
             assert data3[col_idx['appears_in_multiple_groups']] == 'No'
             assert data3[col_idx['has_classification']] == 'No'
 
