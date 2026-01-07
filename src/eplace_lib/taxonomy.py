@@ -6,6 +6,7 @@ selecting representative sequences per taxonomic rank, and extracting sequences 
 """
 
 import os
+import re
 import subprocess
 import logging
 import sys
@@ -445,8 +446,24 @@ def process_blast_results_for_taxonomy(
     
     return results
 
+def sort_strings_and_numbers(s: str):
+    """
+    Extract text and numbers from strings for proper sorting.
+
+    Args:
+        s: string to extract the number from
+    Returns:
+        the number extracted from the string
+    """
+    match = re.match(r'(\D+)(\d+)', s)
+    if match:
+        text_part = match.group(1)
+        num_part = int(match.group(2))
+        return (text_part, num_part)
+    return (s, 0)
 
 def generate_classification_summary(
+    sequences: dict[str, str],
     blast_hits: List[BlastHit],
     output_file: Path,
     rank: str = "genus",
@@ -465,6 +482,7 @@ def generate_classification_summary(
     - Whether the sequence has no appropriate classification
     
     Args:
+        sequences: dictionary of sequences that we read from the fasta file
         blast_hits: List of BlastHit objects with taxonomy information
         output_file: Path to output TSV file
         rank: Taxonomic rank for classification (default: genus)
@@ -488,12 +506,12 @@ def generate_classification_summary(
         query_hits_map[hit.query_id].append(hit)
     
     # Collect all query IDs that were searched
-    all_query_ids = set(query_hits_map.keys())
+    all_query_ids = set(sequences.keys())
     
     # Prepare data for each query
     summary_data = []
     
-    for query_id in sorted(all_query_ids):
+    for query_id in sorted(all_query_ids, key=sort_strings_and_numbers):
         query_hits = query_hits_map.get(query_id, [])
         
         # Initialize classification info

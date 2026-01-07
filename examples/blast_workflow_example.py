@@ -332,6 +332,7 @@ Notes:
     logger.info("\nGenerating classification summary TSV file...")
     try:
         success = generate_classification_summary(
+            sequences=sequences,
             blast_hits=filtered_hits,
             output_file=args.output_classification,
             rank=args.rank,

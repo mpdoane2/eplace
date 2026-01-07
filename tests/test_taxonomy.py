@@ -1031,8 +1031,11 @@ class TestGenerateClassificationSummary:
                     subject_taxonomy=self.human_taxonomy
                 )
             ]
+
+            seqs = {'seq1': 'this has a hit', 'seq2': 'so does this', 'seq3': 'a missing sequence'}
             
             result = generate_classification_summary(
+                sequences=seqs,
                 blast_hits=hits,
                 output_file=output_file,
                 rank='genus',
@@ -1048,7 +1051,7 @@ class TestGenerateClassificationSummary:
                 lines = f.readlines()
             
             # Should have header + 2 data lines
-            assert len(lines) == 3
+            assert len(lines) == 4
             
             # Check header and get column indices
             header = lines[0].strip().split('\t')
@@ -1077,6 +1080,13 @@ class TestGenerateClassificationSummary:
             assert 'Homo' in data2[col_idx['classification_name']]
             assert 'Mammalia' in data2[col_idx['group_name']]
             assert 'Hominidae' in data2[col_idx['tree_label_name']]
+
+            data3 = lines[3].strip().split('\t')
+            assert data3[col_idx['query_id']] == 'seq3'
+            assert 'N/A' in data3[col_idx['classification_name']]
+            assert 'N/A' in data3[col_idx['group_name']]
+            assert 'N/A' in data3[col_idx['tree_label_name']]
+
     
     def test_generate_classification_summary_multiple_groups(self):
         """Test detecting sequences appearing in multiple groups."""
@@ -1121,8 +1131,11 @@ class TestGenerateClassificationSummary:
                     subject_taxonomy=self.human_taxonomy
                 )
             ]
+
+            seqs = {'seq1': 'this has a hit', 'seq2': 'so does this', 'seq3': 'a missing sequence'}
             
             result = generate_classification_summary(
+                sequences=seqs,
                 blast_hits=hits,
                 output_file=output_file,
                 rank='genus',
@@ -1137,7 +1150,7 @@ class TestGenerateClassificationSummary:
                 lines = f.readlines()
             
             # Should have header + 1 data line
-            assert len(lines) == 2
+            assert len(lines) == 4
             
             # Check data using helper method for column indices
             header = lines[0].strip().split('\t')
@@ -1153,32 +1166,7 @@ class TestGenerateClassificationSummary:
             assert 'Mammalia' in group_names
             # Verify they are sorted
             assert group_names == sorted(group_names)
-    
-    def test_generate_classification_summary_no_classification(self):
-        """Test handling sequences with no hits."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmppath = Path(tmpdir)
-            output_file = tmppath / "classification.tsv"
-            
-            # Empty hits list
-            hits = []
-            
-            result = generate_classification_summary(
-                blast_hits=hits,
-                output_file=output_file,
-                rank='genus',
-                group_rank='class',
-                tree_label_rank='genus'
-            )
-            
-            assert result is True
-            
-            # Read and verify content
-            with open(output_file, 'r') as f:
-                lines = f.readlines()
-            
-            # Should only have header
-            assert len(lines) == 1
+
     
     def test_generate_classification_summary_invalid_rank(self):
         """Test with invalid taxonomic rank."""
@@ -1205,8 +1193,10 @@ class TestGenerateClassificationSummary:
                     subject_taxonomy=self.salmonella_taxonomy
                 )
             ]
-            
+            seqs = {'seq1': 'this has a hit', 'seq2': 'so does this', 'seq3': 'a missing sequence'}
+
             result = generate_classification_summary(
+                sequences=seqs,
                 blast_hits=hits,
                 output_file=output_file,
                 rank='invalid_rank',
