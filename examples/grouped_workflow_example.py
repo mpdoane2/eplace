@@ -178,9 +178,9 @@ Notes:
             if base_name.endswith(ext):
                 base_name = base_name[:-len(ext)]
                 break
-        args.output_classification = os.path.join(args.output_dir, f"{base_name}_classification.tsv")
+        args.output_classification = args.output_dir / f"{base_name}_classification.tsv"
     if not args.output_classification.is_absolute():
-        args.output_classification = os.path.join(args.output_dir, args.output_classification)
+        args.output_classification = args.output_dir / args.output_classification
     
     # Validate input file
     if not args.query_fasta.exists():

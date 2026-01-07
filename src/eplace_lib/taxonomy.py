@@ -453,7 +453,11 @@ def sort_strings_and_numbers(s: str):
     Args:
         s: string to extract the number from
     Returns:
-        the number extracted from the string
+        Returns:
+            A tuple ``(text_part, num_part)`` that can be used as a sort key. For strings
+            matching the pattern ``<non-digits><digits>``, this is the non-digit prefix
+            and the trailing integer. For non-matching strings, returns ``(s, 0)``.
+
     """
     match = re.match(r'(\D+)(\d+)', s)
     if match:
@@ -539,7 +543,7 @@ def generate_classification_summary(
 
         classification['blast_hits'] = len(query_hits)
 
-        # Find the best hit (highest bit score) for each rank
+        # Find the best hit (highest bit score) to extract taxonomy information at all ranks
         best_hit = max(query_hits, key=lambda h: h.bit_score)
         
         # Track which ranks have valid taxonomy information
@@ -585,13 +589,17 @@ def generate_classification_summary(
         
         # Check if sequence appears in multiple groups at the group_rank level
         group_names = set()
+        group_taxids = set()
         for hit in query_hits:
             if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
-                group_names.add(hit.subject_taxonomy[group_rank][1])
-        
+                taxid, name = hit.subject_taxonomy[group_rank]
+                group_names.add(name)
+                group_taxids.add(str(taxid))
+
         if len(group_names) > 1:
             classification['appears_in_multiple_groups'] = 'Yes'
             classification['group_name'] = '; '.join(sorted(group_names))
+            classification['group_taxid'] = '; '.join(sorted(group_taxids))
         
         summary_data.append(classification)
     

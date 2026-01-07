@@ -1082,12 +1082,16 @@ class TestGenerateClassificationSummary:
             assert 'Homo' in data2[col_idx['classification_name']]
             assert 'Mammalia' in data2[col_idx['group_name']]
             assert 'Hominidae' in data2[col_idx['tree_label_name']]
+            assert data2[col_idx['appears_in_multiple_groups']] == 'No'
+            assert data2[col_idx['has_classification']] == 'Yes'
 
             data3 = lines[3].strip().split('\t')
             assert data3[col_idx['query_id']] == 'seq3'
             assert 'N/A' in data3[col_idx['classification_name']]
             assert 'N/A' in data3[col_idx['group_name']]
             assert 'N/A' in data3[col_idx['tree_label_name']]
+            assert data3[col_idx['appears_in_multiple_groups']] == 'No'
+            assert data3[col_idx['has_classification']] == 'No'
 
     
     def test_generate_classification_summary_multiple_groups(self):
@@ -1151,7 +1155,7 @@ class TestGenerateClassificationSummary:
             with open(output_file, 'r') as f:
                 lines = f.readlines()
             
-            # Should have header + 1 data line
+            # Should have header + 3 data lines (one per sequence)
             assert len(lines) == 4
             
             # Check data using helper method for column indices
