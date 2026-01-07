@@ -6,6 +6,7 @@ selecting representative sequences per taxonomic rank, and extracting sequences 
 """
 
 import os
+import re
 import subprocess
 import logging
 import sys
@@ -19,6 +20,9 @@ import pytaxonkit
 
 # Configure module logger
 logger = logging.getLogger(__name__)
+
+# Valid taxonomic ranks supported by the library
+VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
 
 
 class TaxonomyExtractor:
@@ -38,7 +42,6 @@ class TaxonomyExtractor:
         """
         # make sure that duplicate taxids are removed before we look them up
         tax_ids = list(set(tax_ids))
-        VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
         taxonomy_dict = {}
 
         # we need to get the whole lineage, and then convert it to a dict
@@ -385,7 +388,6 @@ def process_blast_results_for_taxonomy(
         dictionary mapping query IDs to output FASTA file paths
     """
     
-    VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
     if rank not in VALID_RANKS:
         raise ValueError(f"Rank: {rank} is not a valid rank. It must be one of: {VALID_RANKS}")
 
@@ -443,3 +445,207 @@ def process_blast_results_for_taxonomy(
         results[query_id] = output_fasta
     
     return results
+
+def sort_strings_and_numbers(s: str):
+    """
+    Extract text and numbers from strings for proper sorting.
+
+    Args:
+        s: string to extract the number from
+    Returns:
+        Returns:
+            A tuple ``(text_part, num_part)`` that can be used as a sort key. For strings
+            matching the pattern ``<non-digits><digits>``, this is the non-digit prefix
+            and the trailing integer. For non-matching strings, returns ``(s, 0)``.
+
+    """
+    match = re.match(r'(\D+)(\d+)', s)
+    if match:
+        text_part = match.group(1)
+        num_part = int(match.group(2))
+        return (text_part, num_part)
+    return (s, 0)
+
+def generate_classification_summary(
+    sequences: dict[str, str],
+    blast_hits: List[BlastHit],
+    output_file: Path,
+    rank: str = "genus",
+    group_rank: str = "class",
+    tree_label_rank: str = "genus"
+) -> bool:
+    """
+    Generate a classification summary TSV file for each query sequence.
+    
+    This function creates a TSV file that reports:
+    - Query sequence ID
+    - Closest organism at the classification rank (--rank)
+    - Closest organism at the grouping rank (--group-rank)
+    - Closest organism at the tree labeling rank (--tree-label-rank)
+    - Whether the sequence appears in multiple groups
+    - Whether the sequence has no appropriate classification
+    
+    Args:
+        sequences: dictionary of sequences that we read from the fasta file
+        blast_hits: List of BlastHit objects with taxonomy information
+        output_file: Path to output TSV file
+        rank: Taxonomic rank for classification (default: genus)
+        group_rank: Taxonomic rank for grouping (default: class)
+        tree_label_rank: Taxonomic rank for tree labeling (default: genus)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info(f"Generating classification summary TSV to {output_file}")
+    
+    # Validate ranks
+    for r, r_name in [(rank, 'rank'), (group_rank, 'group_rank'), (tree_label_rank, 'tree_label_rank')]:
+        if r not in VALID_RANKS:
+            logger.error(f"{r_name}: {r} is not a valid rank. It must be one of: {VALID_RANKS}")
+            return False
+    
+    # Group hits by query
+    query_hits_map = defaultdict(list)
+    for hit in blast_hits:
+        query_hits_map[hit.query_id].append(hit)
+    
+    # Collect all query IDs that were searched
+    all_query_ids = set(sequences.keys())
+    
+    # Prepare data for each query
+    summary_data = []
+    
+    for query_id in sorted(all_query_ids, key=sort_strings_and_numbers):
+        query_hits = query_hits_map.get(query_id, [])
+        
+        # Initialize classification info
+        classification = {
+            'query_id': query_id,
+            'blast_hits': 0,
+            'classification_rank': rank,
+            'classification_taxid': 'N/A',
+            'classification_name': 'N/A',
+            'group_rank': group_rank,
+            'group_taxid': 'N/A',
+            'group_name': 'N/A',
+            'tree_label_rank': tree_label_rank,
+            'tree_label_taxid': 'N/A',
+            'tree_label_name': 'N/A',
+            'appears_in_multiple_groups': 'No',
+            'has_classification': 'Yes'
+        }
+        
+        if not query_hits:
+            # No hits for this query
+            classification['has_classification'] = 'No'
+            summary_data.append(classification)
+            continue
+
+        classification['blast_hits'] = len(query_hits)
+
+        # Find the best hit (highest bit score) to extract taxonomy information at all ranks
+        best_hit = max(query_hits, key=lambda h: h.bit_score)
+        
+        # Track which ranks have valid taxonomy information
+        # We check three ranks: rank, group_rank, and tree_label_rank
+        ranks_to_check = [
+            (rank, 'classification'),
+            (group_rank, 'group'),
+            (tree_label_rank, 'tree_label')
+        ]
+        missing_ranks = []
+        
+        # Extract closest organism at classification rank
+        if best_hit.subject_taxonomy and rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[rank]
+            classification['classification_taxid'] = taxid
+            classification['classification_name'] = name
+        else:
+            missing_ranks.append(rank)
+        
+        # Extract closest organism at group rank
+        if best_hit.subject_taxonomy and group_rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[group_rank]
+            classification['group_taxid'] = taxid
+            classification['group_name'] = name
+        else:
+            missing_ranks.append(group_rank)
+        
+        # Extract closest organism at tree label rank
+        if best_hit.subject_taxonomy and tree_label_rank in best_hit.subject_taxonomy:
+            taxid, name = best_hit.subject_taxonomy[tree_label_rank]
+            classification['tree_label_taxid'] = taxid
+            classification['tree_label_name'] = name
+        else:
+            missing_ranks.append(tree_label_rank)
+        
+        # Set classification status based on missing ranks
+        total_ranks = len(ranks_to_check)
+        if missing_ranks:
+            if len(missing_ranks) == total_ranks:
+                classification['has_classification'] = 'No'
+            else:
+                classification['has_classification'] = 'Partial'
+        
+        # Check if sequence appears in multiple groups at the group_rank level
+        group_names = set()
+        group_taxids = set()
+        for hit in query_hits:
+            if hit.subject_taxonomy and group_rank in hit.subject_taxonomy:
+                taxid, name = hit.subject_taxonomy[group_rank]
+                group_names.add(name)
+                group_taxids.add(str(taxid))
+
+        if len(group_names) > 1:
+            classification['appears_in_multiple_groups'] = 'Yes'
+            classification['group_name'] = '; '.join(sorted(group_names))
+            classification['group_taxid'] = '; '.join(sorted(group_taxids))
+        
+        summary_data.append(classification)
+    
+    # Write TSV file
+    try:
+        with open(output_file, 'w') as f:
+            # Write header
+            headers = [
+                'query_id',
+                'blast_hits',
+                'classification_rank',
+                'classification_taxid',
+                'classification_name',
+                'group_rank',
+                'group_taxid',
+                'group_name',
+                'tree_label_rank',
+                'tree_label_taxid',
+                'tree_label_name',
+                'appears_in_multiple_groups',
+                'has_classification'
+            ]
+            f.write('\t'.join(headers) + '\n')
+            
+            # Write data
+            for entry in summary_data:
+                row = [
+                    entry['query_id'],
+                    str(entry['blast_hits']),
+                    entry['classification_rank'],
+                    entry['classification_taxid'],
+                    entry['classification_name'],
+                    entry['group_rank'],
+                    entry['group_taxid'],
+                    entry['group_name'],
+                    entry['tree_label_rank'],
+                    entry['tree_label_taxid'],
+                    entry['tree_label_name'],
+                    entry['appears_in_multiple_groups'],
+                    entry['has_classification']
+                ]
+                f.write('\t'.join(row) + '\n')
+        
+        logger.info(f"Successfully wrote classification summary for {len(summary_data)} queries to {output_file}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error writing classification summary TSV: {e}")
+        return False

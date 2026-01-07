@@ -20,7 +20,8 @@ from .blast_analysis import (
 from .taxonomy import (
     TaxonomyExtractor,
     SequenceExtractor,
-    process_blast_results_for_taxonomy
+    process_blast_results_for_taxonomy,
+    generate_classification_summary
 )
 from .alignment import (
     SequenceTrimmer,
@@ -45,6 +46,7 @@ __all__ = [
     "TaxonomyExtractor",
     "SequenceExtractor",
     "process_blast_results_for_taxonomy",
+    "generate_classification_summary",
     "SequenceTrimmer",
     "MAFFTAligner",
     "IQTreeBuilder",

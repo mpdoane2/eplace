@@ -10,6 +10,7 @@ This script shows how to:
 5. Save results to separate FASTA files
 """
 
+import os
 import sys
 import argparse
 import logging
@@ -17,7 +18,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
-from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits
+from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits, generate_classification_summary
 from eplace_lib.alignment import process_query_alignment_and_tree
 
 # Configure logging
@@ -81,6 +82,14 @@ Notes:
     )
     
     parser.add_argument(
+        '--tree-label-rank',
+        type=str,
+        default='genus',
+        choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
+        help='Taxonomic rank to use for tree labeling (default: genus)'
+    )
+    
+    parser.add_argument(
         '--min-identity',
         type=float,
         default=90.0,
@@ -128,12 +137,32 @@ Notes:
     )
     
     parser.add_argument(
+        '--output-classification',
+        type=Path,
+        default=None,
+        help='Path to output classification TSV file (default: <query_basename>_classification.tsv)'
+    )
+    
+    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Display what would be done without actually running BLAST'
     )
     
     args = parser.parse_args()
+    
+    # Set default output classification file if not provided
+    if args.output_classification is None:
+        # Get the base name of the query fasta without extension
+        base_name = args.query_fasta.stem
+        # Remove common FASTA extensions if present
+        for ext in ['.fasta', '.fa', '.fna', '.ffn', '.faa', '.frn']:
+            if base_name.endswith(ext):
+                base_name = base_name[:-len(ext)]
+                break
+        args.output_classification = args.output_dir / f"{base_name}_classification.tsv"
+    if not args.output_classification.is_absolute():
+        args.output_classification = args.output_dir / args.output_classification
     
     # Validate input file
     if not args.query_fasta.exists():
@@ -152,6 +181,8 @@ Notes:
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Taxonomic rank: {args.rank}")
     logger.info(f"Taxonomic rank for grouping: {args.group_rank}")
+    logger.info(f"Taxonomic rank for tree labeling: {args.tree_label_rank}")
+    logger.info(f"Classification output file: {args.output_classification}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
     logger.info(f"Overwrite: {args.overwrite_existing_blast} (skip_existing: {skip_existing})")
@@ -296,6 +327,25 @@ Notes:
         logger.info(f"\nAlignment and tree building completed for {len(alignment_results)} queries")
     else:
         logger.info("\n[Step 5/5] Skipping alignment and tree building (--skip-alignment)")
+
+    # Step 6: Generate classification summary TSV
+    logger.info("\nGenerating classification summary TSV file...")
+    try:
+        success = generate_classification_summary(
+            sequences=sequences,
+            blast_hits=filtered_hits,
+            output_file=args.output_classification,
+            rank=args.rank,
+            group_rank=args.group_rank,
+            tree_label_rank=args.tree_label_rank
+        )
+        
+        if success:
+            logger.info(f"✓ Classification summary: {args.output_classification}")
+        else:
+            logger.warning("Failed to generate classification summary")
+    except Exception as e:
+        logger.error(f"Error generating classification summary: {e}")
 
     logger.info("\n" + "=" * 60)
     logger.info("Workflow completed successfully!")
