@@ -336,6 +336,146 @@ class IQTreeBuilder:
             return False
     
     @staticmethod
+    def build_tree_background(
+        alignment_fasta: Path,
+        output_prefix: Path,
+        model: str = "MFP"
+    ) -> Optional[Dict]:
+        """
+        Start building a phylogenetic tree using IQTree in the background.
+        
+        This method starts IQTree as a background process and returns immediately,
+        allowing multiple trees to be built in parallel.
+        
+        Args:
+            alignment_fasta: Path to aligned FASTA file
+            output_prefix: Prefix for output files
+            model: Substitution model (default: "MFP" for automatic ModelFinder Plus selection)
+            
+        Returns:
+            Dictionary with process information if successful, None otherwise:
+                - 'process': subprocess.Popen object
+                - 'output_prefix': output prefix path
+                - 'alignment_fasta': input alignment file path
+                - 'tree_file': expected tree file path
+        """
+        available, iqtree_cmd = IQTreeBuilder.check_iqtree_available()
+        if not available:
+            logger.error("IQTree is not available. Please install IQTree or IQTree2.")
+            return None
+        
+        if not alignment_fasta.exists():
+            logger.error(f"Alignment file not found: {alignment_fasta}")
+            return None
+        
+        # Build IQTree command
+        cmd = [
+            iqtree_cmd,
+            '-s', str(alignment_fasta),
+            '-pre', str(output_prefix),
+            '-m', model,
+            '-T', "AUTO"
+        ]
+        
+        logger.info(f"Starting IQTree in background: {' '.join(cmd)}")
+        
+        try:
+            # Start process in background
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            tree_file = Path(str(output_prefix) + ".treefile")
+            
+            return {
+                'process': process,
+                'output_prefix': output_prefix,
+                'alignment_fasta': alignment_fasta,
+                'tree_file': tree_file,
+                'cmd': ' '.join(cmd)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error starting IQTree: {e}")
+            return None
+    
+    @staticmethod
+    def wait_for_tree_jobs(
+        jobs: List[Dict],
+        timeout: int = 7200
+    ) -> Dict[str, bool]:
+        """
+        Wait for multiple IQTree jobs to complete.
+        
+        This method polls all running processes and waits for them to complete.
+        Since the processes are already running in parallel (started with Popen),
+        this method just collects their results as they finish.
+        
+        Args:
+            jobs: List of job dictionaries returned by build_tree_background()
+            timeout: Maximum time to wait for each individual job in seconds (default: 7200 = 2 hours)
+            
+        Returns:
+            Dictionary mapping output_prefix to success status (True/False)
+        """
+        results = {}
+        
+        logger.info(f"Waiting for {len(jobs)} IQTree jobs to complete...")
+        
+        for job in jobs:
+            process = job['process']
+            output_prefix = job['output_prefix']
+            tree_file = job['tree_file']
+            cmd = job.get('cmd', 'IQTree')
+            
+            try:
+                # Wait for process to complete
+                # Note: This waits for THIS process, but other processes continue running in parallel
+                stdout, stderr = process.communicate(timeout=timeout)
+                
+                if process.returncode != 0:
+                    logger.error(f"IQTree failed for {output_prefix} with error: {stderr}")
+                    results[str(output_prefix)] = False
+                    continue
+                
+                # Check if tree file was created
+                if not tree_file.exists():
+                    logger.error(f"IQTree did not produce a tree file for {output_prefix}")
+                    results[str(output_prefix)] = False
+                    continue
+                
+                logger.info(f"IQTree completed successfully for {output_prefix}. Tree: {tree_file}")
+                results[str(output_prefix)] = True
+                
+            except subprocess.TimeoutExpired:
+                logger.error(f"IQTree timed out for {output_prefix} after {timeout} seconds")
+                process.kill()
+                # Clean up the killed process
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.error(f"Failed to terminate IQTree process for {output_prefix}")
+                results[str(output_prefix)] = False
+            except Exception as e:
+                logger.error(f"Error waiting for IQTree job {output_prefix}: {e}")
+                # Ensure process is cleaned up
+                if process.poll() is None:  # Process still running
+                    process.kill()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
+                results[str(output_prefix)] = False
+        
+        successful = sum(1 for success in results.values() if success)
+        logger.info(f"Completed {successful}/{len(jobs)} IQTree jobs successfully")
+        
+        return results
+    
+    @staticmethod
     def relabel_tree_with_taxonomy(
         tree_file: Path,
         blast_hits: List[BlastHit],
@@ -529,6 +669,161 @@ def process_query_alignment_and_tree(
         logger.info(f"Labeled tree saved to: {labeled_tree}")
     else:
         logger.warning(f"Failed to relabel tree for {query_id}, but unlabeled tree is available")
+    
+    return results
+
+
+def process_query_alignment_and_tree_parallel(
+    query_id: str,
+    query_dir: Path,
+    blast_hits: List[BlastHit],
+    query_fasta: Path,
+    taxonomic_rank: str,
+    num_threads: int = 1,
+    background_tree: bool = False
+) -> Dict[str, Optional[Path]]:
+    """
+    Complete pipeline for a single query: trim, align, and optionally build tree in background.
+    
+    This is similar to process_query_alignment_and_tree, but with an option to start
+    tree building in the background and return immediately without waiting for completion.
+    
+    Args:
+        query_id: Query sequence identifier
+        query_dir: Directory containing query-specific files
+        blast_hits: List of BlastHit objects for this query (with taxonomy info)
+        query_fasta: Path to original query FASTA file
+        taxonomic_rank: The taxonomic rank to use for relabeling the tree
+        num_threads: Number of threads to use
+        background_tree: If True, start tree building in background and return immediately
+        
+    Returns:
+        Dictionary with paths to generated files:
+            - 'trimmed_fasta': Trimmed sequences
+            - 'alignment': Aligned sequences
+            - 'tree_job': Background job info if background_tree=True, None otherwise
+            - 'tree_file': Expected tree file path
+            - 'blast_hits': BLAST hits for later tree relabeling
+            - 'taxonomic_rank': Taxonomic rank for later tree relabeling
+    """
+    results = {
+        'trimmed_fasta': None,
+        'alignment': None,
+        'tree_job': None,
+        'tree_file': None,
+        'labeled_tree_path': None,
+        'blast_hits': blast_hits,
+        'taxonomic_rank': taxonomic_rank
+    }
+    
+    # File paths
+    safe_query_id = query_id.replace('|', '_').replace('/', '_')
+    representatives_fasta = query_dir / f"{safe_query_id}_representatives.fasta"
+    trimmed_fasta = query_dir / f"{safe_query_id}_trimmed.fasta"
+    alignment_fasta = query_dir / f"{safe_query_id}_aligned.fasta"
+    tree_prefix = query_dir / f"{safe_query_id}_tree"
+    tree_file = Path(str(tree_prefix) + ".treefile")
+    labeled_tree = query_dir / f"{safe_query_id}_tree_labeled.treefile"
+    
+    # Step 1: Read query sequence and add it to the representatives file
+    try:
+        query_sequences = FastaReader.read_fasta(query_fasta)
+        if query_id not in query_sequences:
+            logger.error(f"Query {query_id} not found in {query_fasta}")
+            return results
+        
+        # Read representatives and combine with query
+        if not representatives_fasta.exists():
+            logger.error(f"Representatives file not found: {representatives_fasta}")
+            return results
+        
+        # Create combined FASTA with query + representatives
+        combined_fasta = query_dir / f"{safe_query_id}_with_query.fasta"
+        with open(combined_fasta, 'w') as out:
+            # Write query first
+            query_seq = query_sequences[query_id]
+            out.write(f">{query_id}\n")
+            for i in range(0, len(query_seq), 60):
+                out.write(query_seq[i:i+60] + "\n")
+            
+            # Append representatives
+            with open(representatives_fasta, 'r') as rep:
+                out.write(rep.read())
+        
+        logger.info(f"Combined query with representatives: {combined_fasta}")
+        
+    except Exception as e:
+        logger.error(f"Error preparing sequences: {e}")
+        return results
+    
+    # Step 2: Trim sequences based on BLAST coordinates
+    logger.info(f"Trimming sequences for {query_id}...")
+    if SequenceTrimmer.trim_sequences_from_blast_hits(
+        fasta_path=combined_fasta,
+        blast_hits=blast_hits,
+        output_fasta=trimmed_fasta,
+        taxonomic_rank=taxonomic_rank,
+        query_id=query_id
+    ):
+        results['trimmed_fasta'] = trimmed_fasta
+        logger.info(f"Trimmed sequences saved to: {trimmed_fasta}")
+    else:
+        logger.error(f"Failed to trim sequences for {query_id}")
+        return results
+    
+    # Step 3: Align sequences with MAFFT
+    logger.info(f"Aligning sequences for {query_id}...")
+    if MAFFTAligner.align_sequences(
+        input_fasta=trimmed_fasta,
+        output_fasta=alignment_fasta,
+        auto_orient=True,
+        num_threads=num_threads
+    ):
+        results['alignment'] = alignment_fasta
+        logger.info(f"Alignment saved to: {alignment_fasta}")
+    else:
+        logger.error(f"Failed to align sequences for {query_id}")
+        return results
+    
+    # Step 4: Build phylogenetic tree with IQTree
+    if background_tree:
+        # Start tree building in background
+        logger.info(f"Starting phylogenetic tree building in background for {query_id}...")
+        tree_job = IQTreeBuilder.build_tree_background(
+            alignment_fasta=alignment_fasta,
+            output_prefix=tree_prefix,
+        )
+        if tree_job:
+            results['tree_job'] = tree_job
+            results['tree_file'] = tree_file
+            results['labeled_tree_path'] = labeled_tree
+            logger.info(f"Tree building started in background for {query_id}")
+        else:
+            logger.error(f"Failed to start tree building for {query_id}")
+    else:
+        # Build tree synchronously
+        logger.info(f"Building phylogenetic tree for {query_id}...")
+        if IQTreeBuilder.build_tree(
+            alignment_fasta=alignment_fasta,
+            output_prefix=tree_prefix,
+        ):
+            results['tree_file'] = tree_file
+            logger.info(f"Tree saved to: {tree_file}")
+            
+            # Step 5: Relabel tree with taxonomic names
+            logger.info(f"Relabeling tree with taxonomic names for {query_id}...")
+            if IQTreeBuilder.relabel_tree_with_taxonomy(
+                tree_file=tree_file,
+                blast_hits=blast_hits,
+                output_tree=labeled_tree,
+                taxonomic_rank=taxonomic_rank
+            ):
+                results['labeled_tree_path'] = labeled_tree
+                logger.info(f"Labeled tree saved to: {labeled_tree}")
+            else:
+                logger.warning(f"Failed to relabel tree for {query_id}, but unlabeled tree is available")
+        else:
+            logger.error(f"Failed to build tree for {query_id}")
     
     return results
 
@@ -938,5 +1233,137 @@ def process_grouped_alignment_and_tree(
         logger.info(f"Labeled tree saved to: {labeled_tree}")
     else:
         logger.warning(f"Failed to relabel tree for group {group_name}, but unlabeled tree is available")
+    
+    return results
+
+
+def process_grouped_alignment_and_tree_parallel(
+    group_name: str,
+    group_dir: Path,
+    taxonomic_rank: str,
+    blast_hits: List[BlastHit],
+    query_ids: List[str],
+    num_threads: int = 1,
+    background_tree: bool = False
+) -> Dict[str, Optional[Path]]:
+    """
+    Complete pipeline for a taxonomic group: trim, align, and optionally build tree in background.
+    
+    This is similar to process_grouped_alignment_and_tree, but with an option to start
+    tree building in the background and return immediately without waiting for completion.
+    
+    Args:
+        group_name: The name of the group, used for file naming
+        group_dir: Directory containing group-specific files
+        taxonomic_rank: Taxonomic rank to use for labeling the tree
+        blast_hits: List of BlastHit objects for all queries in the group
+        query_ids: List of query sequence IDs in this group
+        num_threads: Number of threads to use
+        background_tree: If True, start tree building in background and return immediately
+        
+    Returns:
+        Dictionary with paths to generated files:
+            - 'combined_fasta': Combined sequences (queries + references)
+            - 'trimmed_fasta': Trimmed sequences
+            - 'alignment': Aligned sequences
+            - 'tree_job': Background job info if background_tree=True, None otherwise
+            - 'tree_file': Expected tree file path
+            - 'blast_hits': BLAST hits for later tree relabeling
+            - 'taxonomic_rank': Taxonomic rank for later tree relabeling
+    """
+    results = {
+        'combined_fasta': None,
+        'trimmed_fasta': None,
+        'alignment': None,
+        'tree_job': None,
+        'tree_file': None,
+        'labeled_tree_path': None,
+        'blast_hits': blast_hits,
+        'taxonomic_rank': taxonomic_rank
+    }
+
+    # File paths
+    safe_group_name = group_name.replace(' ', '_').replace('/', '_').replace('|', '_')
+    combined_fasta = group_dir / f"{safe_group_name}_combined.fasta"
+    trimmed_fasta = group_dir / f"{safe_group_name}_trimmed.fasta"
+    alignment_fasta = group_dir / f"{safe_group_name}_aligned.fasta"
+    tree_prefix = group_dir / f"{safe_group_name}_tree"
+    tree_file = Path(str(tree_prefix) + ".treefile")
+    labeled_tree = group_dir / f"{safe_group_name}_tree_labeled.treefile"
+    
+    # Check if combined FASTA exists
+    if not combined_fasta.exists():
+        logger.error(f"Combined FASTA file not found: {combined_fasta}")
+        return results
+    
+    results['combined_fasta'] = combined_fasta
+    
+    # Step 1: Trim sequences based on BLAST coordinates
+    logger.info(f"Trimming sequences for group {group_name}...")
+    if trim_grouped_sequences(
+        input_fasta=combined_fasta,
+        blast_hits=blast_hits,
+        output_fasta=trimmed_fasta,
+        query_ids=query_ids
+    ):
+        results['trimmed_fasta'] = trimmed_fasta
+        logger.info(f"Trimmed sequences saved to: {trimmed_fasta}")
+    else:
+        logger.error(f"Failed to trim sequences for group {group_name}")
+        return results
+    
+    # Step 2: Align sequences with MAFFT
+    logger.info(f"Aligning sequences for group {group_name}...")
+    if MAFFTAligner.align_sequences(
+        input_fasta=trimmed_fasta,
+        output_fasta=alignment_fasta,
+        auto_orient=True,
+        num_threads=num_threads
+    ):
+        results['alignment'] = alignment_fasta
+        logger.info(f"Alignment saved to: {alignment_fasta}")
+    else:
+        logger.error(f"Failed to align sequences for group {group_name}")
+        return results
+    
+    # Step 3: Build phylogenetic tree with IQTree
+    if background_tree:
+        # Start tree building in background
+        logger.info(f"Starting phylogenetic tree building in background for group {group_name}...")
+        tree_job = IQTreeBuilder.build_tree_background(
+            alignment_fasta=alignment_fasta,
+            output_prefix=tree_prefix,
+        )
+        if tree_job:
+            results['tree_job'] = tree_job
+            results['tree_file'] = tree_file
+            results['labeled_tree_path'] = labeled_tree
+            logger.info(f"Tree building started in background for {group_name}")
+        else:
+            logger.error(f"Failed to start tree building for group {group_name}")
+    else:
+        # Build tree synchronously
+        logger.info(f"Building phylogenetic tree for group {group_name}...")
+        if IQTreeBuilder.build_tree(
+            alignment_fasta=alignment_fasta,
+            output_prefix=tree_prefix,
+        ):
+            results['tree_file'] = tree_file
+            logger.info(f"Tree saved to: {tree_file}")
+            
+            # Step 4: Relabel tree with taxonomic names
+            logger.info(f"Relabeling tree with taxonomic names for group {group_name}...")
+            if IQTreeBuilder.relabel_tree_with_taxonomy(
+                tree_file=tree_file,
+                blast_hits=blast_hits,
+                output_tree=labeled_tree,
+                taxonomic_rank=taxonomic_rank
+            ):
+                results['labeled_tree_path'] = labeled_tree
+                logger.info(f"Labeled tree saved to: {labeled_tree}")
+            else:
+                logger.warning(f"Failed to relabel tree for group {group_name}, but unlabeled tree is available")
+        else:
+            logger.error(f"Failed to build tree for group {group_name}")
     
     return results

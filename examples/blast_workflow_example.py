@@ -19,7 +19,7 @@ from collections import defaultdict
 
 from eplace_lib.blast_analysis import run_blast_search, FastaReader
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits, generate_classification_summary
-from eplace_lib.alignment import process_query_alignment_and_tree
+from eplace_lib.alignment import process_query_alignment_and_tree, process_query_alignment_and_tree_parallel, IQTreeBuilder
 
 # Configure logging
 logging.basicConfig(
@@ -286,9 +286,13 @@ Notes:
         for hit in filtered_hits:
             hits_by_query_map[hit.query_id].append(hit)
         
-        alignment_results = {}
+        # First, process all queries to do trimming and alignment
+        # and start tree building in background
+        tree_jobs = []
+        query_job_info = {}
+        
         for query_id, query_hits in hits_by_query_map.items():
-            logger.info(f"\nProcessing alignment and tree for query: {query_id}")
+            logger.info(f"\nProcessing alignment for query: {query_id}")
             
             # Get the query directory
             safe_query_id = query_id.replace('|', '_').replace('/', '_')
@@ -300,31 +304,70 @@ Notes:
             
             # Process alignment and tree
             try:
-                result = process_query_alignment_and_tree(
+                result = process_query_alignment_and_tree_parallel(
                     query_id=query_id,
                     query_dir=query_dir,
                     blast_hits=query_hits,
                     taxonomic_rank=args.rank,
                     query_fasta=args.query_fasta,
-                    num_threads=args.num_threads
+                    num_threads=args.num_threads,
+                    background_tree=True  # Start tree building in background
                 )
-                alignment_results[query_id] = result
                 
-                # Log results
-                if result['labeled_tree']:
-                    logger.info(f"  ✓ Labeled tree: {result['labeled_tree']}")
-                elif result['tree']:
-                    logger.info(f"  ✓ Tree: {result['tree']}")
+                # Log progress
                 if result['alignment']:
                     logger.info(f"  ✓ Alignment: {result['alignment']}")
                 if result['trimmed_fasta']:
                     logger.info(f"  ✓ Trimmed sequences: {result['trimmed_fasta']}")
+                
+                # Collect tree jobs for later waiting
+                if result['tree_job']:
+                    tree_jobs.append(result['tree_job'])
+                    query_job_info[str(result['tree_file'])] = {
+                        'query_id': query_id,
+                        'tree_file': result['tree_file'],
+                        'labeled_tree_path': result['labeled_tree_path'],
+                        'blast_hits': result['blast_hits'],
+                        'taxonomic_rank': result['taxonomic_rank']
+                    }
+                    logger.info(f"  ✓ Tree building started in background")
                     
             except Exception as e:
                 logger.error(f"Error processing {query_id}: {e}")
                 continue
         
-        logger.info(f"\nAlignment and tree building completed for {len(alignment_results)} queries")
+        # Wait for all tree building jobs to complete
+        if tree_jobs:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Waiting for {len(tree_jobs)} tree building jobs to complete...")
+            logger.info(f"This may take a while depending on the size of the alignments.")
+            logger.info(f"{'='*60}\n")
+            
+            tree_results = IQTreeBuilder.wait_for_tree_jobs(tree_jobs)
+            
+            # Relabel trees that completed successfully
+            logger.info("\nRelabeling trees with taxonomic names...")
+            for tree_path, success in tree_results.items():
+                if success and tree_path in query_job_info:
+                    job_info = query_job_info[tree_path]
+                    query_id = job_info['query_id']
+                    tree_file = job_info['tree_file']
+                    labeled_tree = job_info['labeled_tree_path']
+                    blast_hits = job_info['blast_hits']
+                    taxonomic_rank = job_info['taxonomic_rank']
+                    
+                    logger.info(f"  Processing {query_id}...")
+                    if IQTreeBuilder.relabel_tree_with_taxonomy(
+                        tree_file=tree_file,
+                        blast_hits=blast_hits,
+                        output_tree=labeled_tree,
+                        taxonomic_rank=taxonomic_rank
+                    ):
+                        logger.info(f"    ✓ Labeled tree: {labeled_tree}")
+                    else:
+                        logger.warning(f"    ! Failed to relabel tree, but unlabeled tree is available: {tree_file}")
+        
+        logger.info(f"\nAlignment and tree building completed for {len(hits_by_query_map)} queries")
     else:
         logger.info("\n[Step 5/5] Skipping alignment and tree building (--skip-alignment)")
 
