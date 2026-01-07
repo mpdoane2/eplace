@@ -410,9 +410,13 @@ class IQTreeBuilder:
         """
         Wait for multiple IQTree jobs to complete.
         
+        This method polls all running processes and waits for them to complete.
+        Since the processes are already running in parallel (started with Popen),
+        this method just collects their results as they finish.
+        
         Args:
             jobs: List of job dictionaries returned by build_tree_background()
-            timeout: Maximum time to wait for each job in seconds (default: 7200 = 2 hours)
+            timeout: Maximum time to wait for each individual job in seconds (default: 7200 = 2 hours)
             
         Returns:
             Dictionary mapping output_prefix to success status (True/False)
@@ -429,6 +433,7 @@ class IQTreeBuilder:
             
             try:
                 # Wait for process to complete
+                # Note: This waits for THIS process, but other processes continue running in parallel
                 stdout, stderr = process.communicate(timeout=timeout)
                 
                 if process.returncode != 0:
@@ -446,11 +451,23 @@ class IQTreeBuilder:
                 results[str(output_prefix)] = True
                 
             except subprocess.TimeoutExpired:
-                logger.error(f"IQTree timed out for {output_prefix}")
+                logger.error(f"IQTree timed out for {output_prefix} after {timeout} seconds")
                 process.kill()
+                # Clean up the killed process
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.error(f"Failed to terminate IQTree process for {output_prefix}")
                 results[str(output_prefix)] = False
             except Exception as e:
                 logger.error(f"Error waiting for IQTree job {output_prefix}: {e}")
+                # Ensure process is cleaned up
+                if process.poll() is None:  # Process still running
+                    process.kill()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
                 results[str(output_prefix)] = False
         
         successful = sum(1 for success in results.values() if success)
