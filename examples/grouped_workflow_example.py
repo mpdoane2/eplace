@@ -27,6 +27,7 @@ from eplace_lib.blast_analysis import run_blast_search, FastaReader
 from eplace_lib.taxonomy import process_blast_results_for_taxonomy, rewrite_blast_hits, generate_classification_summary
 from eplace_lib.alignment import check_alignment_consistency, group_hits_by_group_rank
 from eplace_lib.alignment import create_grouped_fasta_with_queries, process_grouped_alignment_and_tree
+from eplace_lib.alignment import process_grouped_alignment_and_tree_parallel, IQTreeBuilder
 
 # Configure logging
 logging.basicConfig(
@@ -360,6 +361,11 @@ Notes:
     if not args.skip_alignment:
         logger.info("\n[Step 7/7] Building alignments and phylogenetic trees for each group...")
         
+        # First, process all groups to do trimming and alignment
+        # and start tree building in background
+        tree_jobs = []
+        group_job_info = {}
+        
         for group_tid, group_info in group_results.items():
             group_name = group_info['name']
             group_dir = group_info['dir']
@@ -369,28 +375,68 @@ Notes:
             logger.info(f"\nProcessing group: {group_name} ({group_tid})")
             
             try:
-                result = process_grouped_alignment_and_tree(
+                result = process_grouped_alignment_and_tree_parallel(
                     group_name=group_name,
                     group_dir=group_dir,
                     taxonomic_rank=args.tree_label_rank,
                     blast_hits=blast_hits,
                     query_ids=query_ids,
-                    num_threads=args.num_threads
+                    num_threads=args.num_threads,
+                    background_tree=True  # Start tree building in background
                 )
                 
-                # Log results
-                if result['labeled_tree']:
-                    logger.info(f"  ✓ Labeled tree: {result['labeled_tree']}")
-                elif result['tree']:
-                    logger.info(f"  ✓ Tree: {result['tree']}")
+                # Log progress
                 if result['alignment']:
                     logger.info(f"  ✓ Alignment: {result['alignment']}")
                 if result['trimmed_fasta']:
                     logger.info(f"  ✓ Trimmed sequences: {result['trimmed_fasta']}")
+                
+                # Collect tree jobs for later waiting
+                if result['tree_job']:
+                    tree_jobs.append(result['tree_job'])
+                    group_job_info[str(result['tree_file'])] = {
+                        'group_name': group_name,
+                        'tree_file': result['tree_file'],
+                        'labeled_tree_path': result['labeled_tree_path'],
+                        'blast_hits': result['blast_hits'],
+                        'taxonomic_rank': result['taxonomic_rank']
+                    }
+                    logger.info(f"  ✓ Tree building started in background")
                     
             except Exception as e:
                 logger.error(f"Error processing {group_name}: {e}")
                 continue
+        
+        # Wait for all tree building jobs to complete
+        if tree_jobs:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Waiting for {len(tree_jobs)} tree building jobs to complete...")
+            logger.info(f"This may take a while depending on the size of the alignments.")
+            logger.info(f"{'='*60}\n")
+            
+            tree_results = IQTreeBuilder.wait_for_tree_jobs(tree_jobs)
+            
+            # Relabel trees that completed successfully
+            logger.info("\nRelabeling trees with taxonomic names...")
+            for tree_path, success in tree_results.items():
+                if success and tree_path in group_job_info:
+                    job_info = group_job_info[tree_path]
+                    group_name = job_info['group_name']
+                    tree_file = job_info['tree_file']
+                    labeled_tree = job_info['labeled_tree_path']
+                    blast_hits = job_info['blast_hits']
+                    taxonomic_rank = job_info['taxonomic_rank']
+                    
+                    logger.info(f"  Processing {group_name}...")
+                    if IQTreeBuilder.relabel_tree_with_taxonomy(
+                        tree_file=tree_file,
+                        blast_hits=blast_hits,
+                        output_tree=labeled_tree,
+                        taxonomic_rank=taxonomic_rank
+                    ):
+                        logger.info(f"    ✓ Labeled tree: {labeled_tree}")
+                    else:
+                        logger.warning(f"    ! Failed to relabel tree, but unlabeled tree is available: {tree_file}")
         
         logger.info(f"\nAlignment and tree building completed for {len(group_results)} groups")
     else:
