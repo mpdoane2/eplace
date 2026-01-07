@@ -522,7 +522,7 @@ def generate_classification_summary(
         classification = {
             'query_id': query_id,
             'blast_hits': 0,
-            'taxonomy' : "",
+            'taxonomy': ';;;;;',
             'classification_rank': rank,
             'classification_taxid': 'N/A',
             'classification_name': 'N/A',
@@ -546,9 +546,9 @@ def generate_classification_summary(
 
         # Find the best hit (highest bit score) to extract taxonomy information at all ranks
         best_hit = max(query_hits, key=lambda h: h.bit_score)
-
-        classification['taxonomy'] = ';'.join([best_hit.subject_taxonomy[rank][1] for
-                                                rank in VALID_RANKS if rank in best_hit.subject_taxonomy])
+        if best_hit.subject_taxonomy:
+            classification['taxonomy'] = ';'.join([best_hit.subject_taxonomy[rank][1] if rank in best_hit.subject_taxonomy else ""
+                                                   for rank in VALID_RANKS])
 
         # Track which ranks have valid taxonomy information
         # We check three ranks: rank, group_rank, and tree_label_rank
