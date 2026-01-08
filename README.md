@@ -15,6 +15,7 @@ A Python library for analyzing environmental DNA (eDNA) sequences through BLAST 
 - **Sequence Trimming**: Trim reference sequences to aligned regions based on BLAST coordinates
 - **Multiple Sequence Alignment**: Align sequences using MAFFT with auto-orientation
 - **Phylogenetic Trees**: Build and label phylogenetic trees using IQTree
+- **Results Summary Output**: Creates a tab separated output that summarises the per-sequence matches.
 
 ## Installation
 
@@ -232,23 +233,6 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 - `--skip-alignment`: Skip alignment and tree building steps
 - `--alignment-tolerance INT`: Maximum coordinate difference for alignment consistency (default: 50)
 - `--output-classification PATH`: Path to output classification TSV file
-
-## Legacy Scripts
-
-The original example scripts are still available in the `examples/` directory:
-
-```bash
-# Basic usage - BLAST search and representative sequence extraction
-python examples/blast_workflow_example.py query.fasta output_dir
-
-# Grouped workflow
-python examples/grouped_workflow_example.py query.fasta output_dir
-
-# Database download
-python examples/download_ncbi_example.py
-```
-
-However, we recommend using the unified `eplace` command instead.
 
 ## Documentation
 
