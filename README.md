@@ -242,9 +242,28 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 
 ## Documentation
 
-- [Command-Line Interface](docs/cli.md) - Complete CLI reference and usage guide
-- [NCBI Database Download](docs/ncbi_download.md) - Downloading and managing BLAST databases
-- [BLAST Workflow](docs/blast_workflow.md) - Complete guide to BLAST analysis and taxonomy extraction
+Full documentation is available at [Read the Docs](https://eplace.readthedocs.io/).
+
+- [Installation Guide](https://eplace.readthedocs.io/en/latest/installation.html) - Complete installation instructions
+- [Quick Start Guide](https://eplace.readthedocs.io/en/latest/quickstart.html) - Get started quickly
+- [Command-Line Interface](https://eplace.readthedocs.io/en/latest/cli.html) - Complete CLI reference
+- [Workflows](https://eplace.readthedocs.io/en/latest/workflows.html) - Individual and grouped workflow details
+- [API Reference](https://eplace.readthedocs.io/en/latest/api.html) - Python API documentation
+- [NCBI Database Download](https://eplace.readthedocs.io/en/latest/ncbi_download.html) - Database management guide
+- [BLAST Workflow](https://eplace.readthedocs.io/en/latest/blast_workflow.html) - BLAST analysis guide
+- [Alignment](https://eplace.readthedocs.io/en/latest/alignment.html) - Sequence alignment documentation
+- [Phylogenetic Trees](https://eplace.readthedocs.io/en/latest/phylogenetic_trees.html) - Tree building guide
+- [Contributing](https://eplace.readthedocs.io/en/latest/contributing.html) - Contribution guidelines
+
+### Local Documentation
+
+You can also build the documentation locally:
+
+```bash
+cd docs
+make html
+# Open docs/build/html/index.html in your browser
+```
 
 ## Workflow Comparison
 

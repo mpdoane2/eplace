@@ -33,6 +33,11 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "myst-parser>=2.0.0",
+]
 
 [project.scripts]
 eplace = "eplace_lib.cli:main"
