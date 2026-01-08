@@ -252,6 +252,7 @@ However, we recommend using the unified `eplace` command instead.
 
 ## Documentation
 
+- [Command-Line Interface](docs/cli.md) - Complete CLI reference and usage guide
 - [NCBI Database Download](docs/ncbi_download.md) - Downloading and managing BLAST databases
 - [BLAST Workflow](docs/blast_workflow.md) - Complete guide to BLAST analysis and taxonomy extraction
 
