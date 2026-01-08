@@ -29,7 +29,7 @@ class TestTaxonomyExtractor:
     def setup_method(self):
         self.taxonomy_extractor = TaxonomyExtractor()
         self.salmonella_taxonomy = {
-            'domain' : ('2', 'Bacteria'),
+            'domain': ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
