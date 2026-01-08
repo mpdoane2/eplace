@@ -23,12 +23,17 @@ A Python library for analyzing environmental DNA (eDNA) sequences through BLAST 
 git clone https://github.com/linsalrob/eplace.git
 cd eplace
 
-# Install in development mode
+# Install the package
+pip install .
+
+# Or install in development mode
 pip install -e .
 
 # Or with development dependencies
 pip install -e ".[dev]"
 ```
+
+After installation, the `eplace` command will be available in your environment.
 
 ## Requirements
 
@@ -72,7 +77,61 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
+ePLACE provides a unified command-line interface with three main commands:
+
 ### 1. Download NCBI Database
+
+```bash
+# Download the core_nt database to default location
+eplace download
+
+# Force redownload even if database exists
+eplace download --force
+```
+
+### 2. Run Individual BLAST Analysis
+
+Run BLAST search and build one phylogenetic tree per query sequence:
+
+```bash
+# Basic usage with default parameters
+eplace blast query.fasta output_dir
+
+# With custom parameters
+eplace blast query.fasta output_dir \
+    --rank genus \
+    --min-identity 95 \
+    --min-coverage 85 \
+    --num-threads 4
+
+# Skip alignment and tree building (BLAST and extraction only)
+eplace blast query.fasta output_dir --skip-alignment
+
+# Show help
+eplace blast --help
+```
+
+### 3. Run Grouped BLAST Analysis
+
+Run BLAST search and group queries by taxonomic rank for joint phylogenetic analysis:
+
+```bash
+# Basic usage (group by class, default)
+eplace grouped query.fasta output_dir
+
+# Group by different taxonomic rank
+eplace grouped query.fasta output_dir --group-rank order
+
+# Specify both representative and grouping ranks
+eplace grouped query.fasta output_dir --rank genus --group-rank family
+
+# Show help
+eplace grouped --help
+```
+
+### Using the Library API
+
+You can also use ePLACE as a Python library:
 
 ```python
 from eplace_lib import setup_ncbi_database
@@ -80,8 +139,6 @@ from eplace_lib import setup_ncbi_database
 # Download the core_nt database
 success, message = setup_ncbi_database()
 ```
-
-### 2. Run BLAST Analysis
 
 ```python
 from pathlib import Path
@@ -103,59 +160,134 @@ results = process_blast_results_for_taxonomy(
 )
 ```
 
-### 3. Command-Line Interface
+## Command-Line Interface
+
+The `eplace` command provides three subcommands:
+
+### eplace download
+
+Download and setup the NCBI core_nt BLAST database.
+
+**Usage:**
+```bash
+eplace download [--force]
+```
+
+**Options:**
+- `--force`: Force redownload even if database exists
+
+**Notes:**
+- Database will be stored in `$BLASTDB` if set, otherwise `~/blastdb`
+- The download is large (several GB) and may take time
+- MD5 checksums are verified automatically
+
+### eplace blast
+
+Run BLAST search with individual taxonomy analysis. Creates one phylogenetic tree per query sequence.
+
+**Usage:**
+```bash
+eplace blast QUERY_FASTA OUTPUT_DIR [OPTIONS]
+```
+
+**Required Arguments:**
+- `QUERY_FASTA`: Path to query FASTA file
+- `OUTPUT_DIR`: Output directory for results
+
+**Optional Arguments:**
+- `--rank {phylum,class,order,family,genus,species}`: Taxonomic rank for representative selection (default: genus)
+- `--tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for tree labeling (default: genus)
+- `--min-identity FLOAT`: Minimum percent identity for BLAST hits (default: 90.0)
+- `--min-coverage FLOAT`: Minimum query coverage percentage (default: 80.0)
+- `--database NAME`: BLAST database name (default: core_nt)
+- `--blastdb-path PATH`: Path to BLAST database directory
+- `--num-threads INT`: Number of threads for BLAST and alignment (default: 1)
+- `--overwrite-existing-blast`: Overwrite existing BLAST results
+- `--skip-alignment`: Skip alignment and tree building steps
+- `--output-classification PATH`: Path to output classification TSV file
+
+### eplace grouped
+
+Run BLAST search with grouped taxonomy analysis. Groups queries by taxonomic rank and creates one phylogenetic tree per group.
+
+**Usage:**
+```bash
+eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
+```
+
+**Required Arguments:**
+- `QUERY_FASTA`: Path to query FASTA file
+- `OUTPUT_DIR`: Output directory for results
+
+**Optional Arguments:**
+- `--rank {phylum,class,order,family,genus,species}`: Taxonomic rank for representative selection (default: genus)
+- `--group-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for grouping sequences (default: class)
+- `--tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for tree labeling (default: genus)
+- `--min-identity FLOAT`: Minimum percent identity for BLAST hits (default: 90.0)
+- `--min-coverage FLOAT`: Minimum query coverage percentage (default: 80.0)
+- `--database NAME`: BLAST database name (default: core_nt)
+- `--blastdb-path PATH`: Path to BLAST database directory
+- `--num-threads INT`: Number of threads for BLAST and alignment (default: 1)
+- `--overwrite-existing-blast`: Overwrite existing BLAST results
+- `--skip-alignment`: Skip alignment and tree building steps
+- `--alignment-tolerance INT`: Maximum coordinate difference for alignment consistency (default: 50)
+- `--output-classification PATH`: Path to output classification TSV file
+
+## Legacy Scripts
+
+The original example scripts are still available in the `examples/` directory:
 
 ```bash
 # Basic usage - BLAST search and representative sequence extraction
 python examples/blast_workflow_example.py query.fasta output_dir
 
-# With custom parameters
-python examples/blast_workflow_example.py query.fasta output_dir \
-    --rank genus \
-    --min-identity 95 \
-    --min-coverage 85 \
-    --num-threads 4
+# Grouped workflow
+python examples/grouped_workflow_example.py query.fasta output_dir
 
-# Skip alignment and tree building (BLAST and extraction only)
-python examples/blast_workflow_example.py query.fasta output_dir \
-    --skip-alignment
-
-# Show help
-python examples/blast_workflow_example.py --help
+# Database download
+python examples/download_ncbi_example.py
 ```
+
+However, we recommend using the unified `eplace` command instead.
 
 ## Documentation
 
 - [NCBI Database Download](docs/ncbi_download.md) - Downloading and managing BLAST databases
 - [BLAST Workflow](docs/blast_workflow.md) - Complete guide to BLAST analysis and taxonomy extraction
 
-## Examples
+## Workflow Comparison
 
-See the `examples/` directory for comprehensive examples:
+### Individual Workflow (`eplace blast`)
 
-- `download_ncbi_example.py` - Download and manage NCBI databases
-- `blast_workflow_example.py` - Complete BLAST workflow with per-query analysis and trees
-- `grouped_workflow_example.py` - Grouped workflow that combines queries by taxonomic rank
+The individual workflow processes each query sequence independently:
+- Creates one output directory per query sequence
+- Extracts representative sequences for each query at the specified taxonomic rank
+- Builds one multiple sequence alignment per query
+- Creates one phylogenetic tree per query
 
-### Grouped Workflow
+**Use when:** You want to analyze each query sequence in its own phylogenetic context.
 
-The grouped workflow (`grouped_workflow_example.py`) differs from the standard workflow by:
-- Grouping all queries that match to the same taxonomic rank (e.g., class, order)
-- Creating one FASTA file per group containing all queries and unique reference sequences
-- Removing redundant reference sequences within each group
-- Building one alignment and phylogenetic tree per group (instead of per query)
+### Grouped Workflow (`eplace grouped`)
 
-This is useful when you want to analyze multiple related queries together in a single phylogenetic context.
+The grouped workflow combines queries by taxonomic classification:
+- Groups all queries that match to the same taxonomic rank (e.g., class, order)
+- Creates one FASTA file per group containing all queries and unique reference sequences
+- Removes redundant reference sequences within each group
+- Builds one alignment and phylogenetic tree per group (instead of per query)
+
+**Use when:** You want to analyze multiple related queries together in a single phylogenetic context.
+
+### Examples
 
 ```bash
 # Group queries by class (default)
-python examples/grouped_workflow_example.py query.fasta output_dir
+eplace grouped query.fasta output_dir
 
 # Group by a different taxonomic rank
-python examples/grouped_workflow_example.py query.fasta output_dir --group-rank order
+eplace grouped query.fasta output_dir --group-rank order
 
 # Specify both representative rank and grouping rank
-python examples/grouped_workflow_example.py query.fasta output_dir --rank genus --group-rank family
+eplace grouped query.fasta output_dir --rank genus --group-rank family
 ```
 
 ## Testing
