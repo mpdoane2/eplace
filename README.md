@@ -10,6 +10,10 @@ ePLACE: environmental Phylogenetic Localisation and Clade Estimation
 
 A Python library for analyzing environmental DNA (eDNA) sequences through BLAST comparison and taxonomic classification.
 
+## Documentation
+
+For all the features available, [please check out readthedocs](https://eplace.readthedocs.io/en/latest/)
+
 ## Features
 
 - **NCBI Database Management**: Download and manage NCBI BLAST databases (core_nt)
