@@ -22,7 +22,7 @@ import pytaxonkit
 logger = logging.getLogger(__name__)
 
 # Valid taxonomic ranks supported by the library
-VALID_RANKS = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+VALID_RANKS = ['domain', 'phylum', 'class', 'order', 'family', 'genus', 'species']
 
 
 class TaxonomyExtractor:
