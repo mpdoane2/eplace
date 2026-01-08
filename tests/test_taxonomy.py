@@ -29,6 +29,7 @@ class TestTaxonomyExtractor:
     def setup_method(self):
         self.taxonomy_extractor = TaxonomyExtractor()
         self.salmonella_taxonomy = {
+            'domain' : ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
@@ -36,6 +37,7 @@ class TestTaxonomyExtractor:
             'genus': ('590', 'Salmonella')
         }
         self.human_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -44,6 +46,7 @@ class TestTaxonomyExtractor:
             'species': ('9606', 'Homo sapiens')
         }
         self.pan_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -258,6 +261,7 @@ class TestSequenceExtractor:
     
     def setup_method(self):
         self.salmonella_taxonomy = {
+            'domain': ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
@@ -265,6 +269,7 @@ class TestSequenceExtractor:
             'genus': ('590', 'Salmonella')
         }
         self.human_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -273,6 +278,7 @@ class TestSequenceExtractor:
             'species': ('9606', 'Homo sapiens')
         }
         self.pan_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -462,6 +468,7 @@ class TestProcessBlastResultsForTaxonomy:
 
     def setup_method(self):
         self.salmonella_taxonomy = {
+            'domain': ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
@@ -469,6 +476,7 @@ class TestProcessBlastResultsForTaxonomy:
             'genus': ('590', 'Salmonella')
         }
         self.human_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -477,6 +485,7 @@ class TestProcessBlastResultsForTaxonomy:
             'species': ('9606', 'Homo sapiens')
         }
         self.pan_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -580,6 +589,7 @@ class TestRewriteBlastHits:
     
     def setup_method(self):
         self.salmonella_taxonomy = {
+            'domain': ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
@@ -587,6 +597,7 @@ class TestRewriteBlastHits:
             'genus': ('590', 'Salmonella')
         }
         self.human_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -955,6 +966,7 @@ class TestGenerateClassificationSummary:
 
     def setup_method(self):
         self.salmonella_taxonomy = {
+            'domain': ('2', 'Bacteria'),
             'phylum': ('1224', 'Pseudomonadota'),
             'class': ('1236', 'Gammaproteobacteria'),
             'order': ('91347', 'Enterobacterales'),
@@ -964,6 +976,7 @@ class TestGenerateClassificationSummary:
         # in this test taxonomy we deliberartely delete order to confirm that 
         # the missing taxonomies are handeled correctly
         self.human_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'family': ('9604', 'Hominidae'),
@@ -971,6 +984,7 @@ class TestGenerateClassificationSummary:
             'species': ('9606', 'Homo sapiens')
         }
         self.pan_taxonomy = {
+            'domain': ('2759', 'Eukaryota'),
             'phylum': ('7711', 'Chordata'),
             'class': ('40674', 'Mammalia'),
             'order': ('9443', 'Primates'),
@@ -1075,7 +1089,7 @@ class TestGenerateClassificationSummary:
             assert 'Salmonella' in data1[col_idx['classification_name']]
             assert 'Gammaproteobacteria' in data1[col_idx['group_name']]
             assert 'Enterobacteriaceae' in data1[col_idx['tree_label_name']]
-            assert data1[col_idx['taxonomy']] == 'Pseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella;'
+            assert data1[col_idx['taxonomy']] == 'Bacteria;Pseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella;'
             assert data1[col_idx['appears_in_multiple_groups']] == 'No'
             assert data1[col_idx['has_classification']] == 'Yes'
             
@@ -1085,7 +1099,7 @@ class TestGenerateClassificationSummary:
             assert 'Homo' in data2[col_idx['classification_name']]
             assert 'Mammalia' in data2[col_idx['group_name']]
             assert 'Hominidae' in data2[col_idx['tree_label_name']]
-            assert data2[col_idx['taxonomy']] == 'Chordata;Mammalia;;Hominidae;Homo;Homo sapiens'
+            assert data2[col_idx['taxonomy']] == 'Eukaryota;Chordata;Mammalia;;Hominidae;Homo;Homo sapiens'
             assert data2[col_idx['appears_in_multiple_groups']] == 'No'
             assert data2[col_idx['has_classification']] == 'Yes'
 
