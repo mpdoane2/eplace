@@ -22,9 +22,36 @@ mamba install -y bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda:
 
 3. Get and install eplace
 
-```
+```bash
 pip install git+https://github.com/linsalrob/eplace.git
 ```
+
+After installation, the `eplace` command will be available in your environment:
+
+```bash
+# Verify installation
+eplace --help
+
+# Show version
+eplace --version
+```
+
+## Usage
+
+Once installed, you can use the `eplace` command with three subcommands:
+
+- `eplace download` - Download NCBI BLAST database
+- `eplace blast` - Run individual BLAST workflow (one tree per query)
+- `eplace grouped` - Run grouped BLAST workflow (one tree per taxonomic group)
+
+For detailed help on each command:
+```bash
+eplace download --help
+eplace blast --help
+eplace grouped --help
+```
+
+See the [README.md](README.md) for complete documentation and examples.
 
 
 
