@@ -2,7 +2,7 @@
 [![DOI](https://zenodo.org/badge/1120756704.svg)](https://doi.org/10.5281/zenodo.18181123)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![GitHub language count](https://img.shields.io/github/languages/count/linsalrob/eplace)
-
+[![Documentation Status](https://readthedocs.org/projects/eplace/badge/?version=latest)](https://eplace.readthedocs.io/en/latest/)
 
 # eplace
 
