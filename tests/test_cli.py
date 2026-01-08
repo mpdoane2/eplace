@@ -26,7 +26,7 @@ def test_cli_syntax():
     try:
         ast.parse(source)
     except SyntaxError as e:
-        pytest.fail(f"CLI module has syntax error: {e}")
+        raise AssertionError(f"CLI module has syntax error: {e}")
 
 
 def test_cli_has_main_function():
