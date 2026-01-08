@@ -5,7 +5,18 @@
 
 import os
 import sys
+from unittest.mock import MagicMock
+
 sys.path.insert(0, os.path.abspath('../../src'))
+
+# Mock external dependencies that may not be available during doc build
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+        return MagicMock()
+
+MOCK_MODULES = ['pytaxonkit']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
