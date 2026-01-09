@@ -29,6 +29,21 @@ For all the features available, [please check out readthedocs](https://eplace.re
 
 ## Installation
 
+## conda: coming soon
+
+## pip: the easy way
+
+Using pip:
+
+```bash
+# create a new python environment
+python -m venv venv
+source venv/bin/activate
+pip install eplace
+```
+
+### For development (not recommended)
+
 ```bash
 # Clone the repository
 git clone https://github.com/linsalrob/eplace.git
