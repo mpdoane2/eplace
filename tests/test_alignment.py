@@ -529,3 +529,232 @@ class TestProcessQueryAlignmentAndTree:
             
             # Verify trimmed file was created
             assert results['trimmed_fasta'].exists()
+
+
+class TestConcatenateAllGroupsAndBuildTree:
+    """Test cases for concatenate_all_groups_and_build_tree function."""
+
+    def setup_method(self):
+        self.salmonella_taxonomy = {
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('590', 'Salmonella')
+        }
+        self.human_taxonomy = {
+            'phylum': ('7711', 'Chordata'),
+            'class': ('40674', 'Mammalia'),
+            'order': ('9443', 'Primates'),
+            'family': ('9604', 'Hominidae'),
+            'genus': ('9605', 'Homo'),
+            'species': ('9606', 'Homo sapiens')
+        }
+
+    @patch('eplace_lib.alignment.IQTreeBuilder.build_tree')
+    @patch('eplace_lib.alignment.IQTreeBuilder.relabel_tree_with_taxonomy')
+    @patch('eplace_lib.alignment.MAFFTAligner.align_sequences')
+    def test_concatenate_all_groups_basic(self, mock_mafft, mock_relabel, mock_iqtree):
+        """Test basic functionality of concatenating groups and building tree."""
+        from eplace_lib.alignment import concatenate_all_groups_and_build_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create query FASTA
+            query_fasta = tmppath / "query.fasta"
+            query_content = """>query1
+ATCGATCGATCGATCGATCG
+>query2
+GCTAGCTAGCTAGCTAGCTA
+>query3
+TTAATTAATTAATTAATTAA
+"""
+            query_fasta.write_text(query_content)
+            
+            # Create group directories with trimmed files
+            group1_dir = tmppath / "Group1"
+            group1_dir.mkdir()
+            trimmed1 = group1_dir / "Group1_trimmed.fasta"
+            trimmed1_content = """>query1
+ATCGATCGATCGATCGATCG
+>ref1
+ATCGATCGATCGATCGATCGNNNN
+"""
+            trimmed1.write_text(trimmed1_content)
+            
+            group2_dir = tmppath / "Group2"
+            group2_dir.mkdir()
+            trimmed2 = group2_dir / "Group2_trimmed.fasta"
+            trimmed2_content = """>query2
+GCTAGCTAGCTAGCTAGCTA
+>ref2
+GCTAGCTAGCTAGCTAGCTANNNN
+"""
+            trimmed2.write_text(trimmed2_content)
+            
+            # Create classification file
+            classification_file = tmppath / "classification.tsv"
+            classification_content = """query_id\tblast_hits\ttaxonomy\tclassification_rank\tclassification_taxid\tclassification_name
+query1\t5\tPseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella\tgenus\t590\tSalmonella
+query2\t3\tChordata;Mammalia;Primates;Hominidae;Homo\tgenus\t9605\tHomo
+query3\t0\t;;;;;\tgenus\tN/A\tN/A
+"""
+            classification_file.write_text(classification_content)
+            
+            # Create blast hits
+            blast_hits = [
+                BlastHit(
+                    query_id='query1',
+                    subject_id='ref1',
+                    percent_identity=95.0,
+                    alignment_length=20,
+                    query_length=20,
+                    subject_length=24,
+                    query_start=1,
+                    query_end=20,
+                    subject_start=1,
+                    subject_end=20,
+                    evalue=1e-10,
+                    bit_score=40.0,
+                    query_coverage=100.0,
+                    subject_taxid='590',
+                    subject_taxids='590',
+                    subject_taxonomy=self.salmonella_taxonomy
+                ),
+                BlastHit(
+                    query_id='query2',
+                    subject_id='ref2',
+                    percent_identity=95.0,
+                    alignment_length=20,
+                    query_length=20,
+                    subject_length=24,
+                    query_start=1,
+                    query_end=20,
+                    subject_start=1,
+                    subject_end=20,
+                    evalue=1e-10,
+                    bit_score=40.0,
+                    query_coverage=100.0,
+                    subject_taxid='9606',
+                    subject_taxids='9606',
+                    subject_taxonomy=self.human_taxonomy
+                )
+            ]
+            
+            # Mock MAFFT and IQTree
+            mock_mafft.return_value = True
+            mock_iqtree.return_value = True
+            mock_relabel.return_value = True
+            
+            # Run the function
+            results = concatenate_all_groups_and_build_tree(
+                output_dir=tmppath,
+                query_fasta=query_fasta,
+                classification_file=classification_file,
+                blast_hits=blast_hits,
+                tree_label_rank='genus',
+                num_threads=1
+            )
+            
+            # Verify combined file was created and contains all sequences
+            assert results['combined_fasta'] is not None
+            assert results['combined_fasta'].exists()
+            
+            # Read combined file and verify content
+            with open(results['combined_fasta'], 'r') as f:
+                content = f.read()
+                # Should have query1, query2, query3 (zero hits), ref1, ref2
+                assert '>query1' in content
+                assert '>query2' in content
+                assert '>query3' in content  # Zero-hit query should be included
+                assert '>ref1' in content
+                assert '>ref2' in content
+            
+            # Verify MAFFT was called
+            mock_mafft.assert_called_once()
+            
+    def test_concatenate_no_zero_hits(self):
+        """Test concatenation when there are no zero-hit queries."""
+        from eplace_lib.alignment import concatenate_all_groups_and_build_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create query FASTA
+            query_fasta = tmppath / "query.fasta"
+            query_content = """>query1
+ATCGATCGATCGATCGATCG
+"""
+            query_fasta.write_text(query_content)
+            
+            # Create group directory with trimmed file
+            group_dir = tmppath / "Group1"
+            group_dir.mkdir()
+            trimmed = group_dir / "Group1_trimmed.fasta"
+            trimmed_content = """>query1
+ATCGATCGATCGATCGATCG
+>ref1
+ATCGATCGATCGATCGATCGNNNN
+"""
+            trimmed.write_text(trimmed_content)
+            
+            # Create classification file with no zero hits
+            classification_file = tmppath / "classification.tsv"
+            classification_content = """query_id\tblast_hits\ttaxonomy
+query1\t5\tPseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella
+"""
+            classification_file.write_text(classification_content)
+            
+            # Create blast hits
+            blast_hits = [
+                BlastHit(
+                    query_id='query1',
+                    subject_id='ref1',
+                    percent_identity=95.0,
+                    alignment_length=20,
+                    query_length=20,
+                    subject_length=24,
+                    query_start=1,
+                    query_end=20,
+                    subject_start=1,
+                    subject_end=20,
+                    evalue=1e-10,
+                    bit_score=40.0,
+                    query_coverage=100.0,
+                    subject_taxid='590',
+                    subject_taxids='590',
+                    subject_taxonomy=self.salmonella_taxonomy
+                )
+            ]
+            
+            # Since we're mocking alignment and tree building, just verify file creation
+            # The full workflow would require MAFFT and IQTree installed
+            with patch('eplace_lib.alignment.MAFFTAligner.align_sequences') as mock_mafft, \
+                 patch('eplace_lib.alignment.IQTreeBuilder.build_tree') as mock_iqtree, \
+                 patch('eplace_lib.alignment.IQTreeBuilder.relabel_tree_with_taxonomy') as mock_relabel:
+                
+                mock_mafft.return_value = True
+                mock_iqtree.return_value = True
+                mock_relabel.return_value = True
+                
+                # Run the function
+                results = concatenate_all_groups_and_build_tree(
+                    output_dir=tmppath,
+                    query_fasta=query_fasta,
+                    classification_file=classification_file,
+                    blast_hits=blast_hits,
+                    tree_label_rank='genus',
+                    num_threads=1
+                )
+                
+                # Verify combined file exists
+                assert results['combined_fasta'] is not None
+                assert results['combined_fasta'].exists()
+                
+                # Verify no zero-hit queries were added
+                with open(results['combined_fasta'], 'r') as f:
+                    content = f.read()
+                    # Count number of sequences (lines starting with '>')
+                    num_seqs = content.count('>')
+                    assert num_seqs == 2  # query1 + ref1
