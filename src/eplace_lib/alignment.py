@@ -1393,7 +1393,7 @@ def concatenate_all_groups_and_build_tree(
     query_fasta: Path,
     classification_file: Path,
     blast_hits: List[BlastHit],
-    tree_label_rank: str = "genus",
+    combined_tree_label_rank: str = "genus",
     num_threads: int = 1,
     alignment_strategy: str = "auto"
 ) -> Dict[str, Optional[Path]]:
@@ -1414,7 +1414,7 @@ def concatenate_all_groups_and_build_tree(
         query_fasta: Original query FASTA file
         classification_file: Path to classifications.tsv file
         blast_hits: List of all BlastHit objects with taxonomy information
-        tree_label_rank: Taxonomic rank for tree labeling (default: genus)
+        combined_tree_label_rank: Taxonomic rank for tree labeling (default: genus)
         num_threads: Number of threads for alignment and tree building (default: 1)
         alignment_strategy: MAFFT alignment strategy (default: 'auto')
                            Options: 'default', 'auto', 'retree2', 'fftns'
@@ -1562,7 +1562,7 @@ def concatenate_all_groups_and_build_tree(
                 tree_file=tree_file,
                 blast_hits=blast_hits,
                 output_tree=labeled_tree,
-                taxonomic_rank=tree_label_rank
+                taxonomic_rank=combined_tree_label_rank
             ):
                 results['labeled_tree'] = labeled_tree
                 logger.info(f"Labeled tree saved to: {labeled_tree}")

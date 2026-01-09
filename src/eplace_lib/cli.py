@@ -583,7 +583,7 @@ def grouped_command(args):
                 query_fasta=args.query_fasta,
                 classification_file=args.output_classification,
                 blast_hits=filtered_hits,
-                tree_label_rank=args.tree_label_rank,
+                combined_tree_label_rank=args.combined_tree_label_rank,
                 num_threads=args.num_threads
             )
             
@@ -823,6 +823,13 @@ Notes:
         default='genus',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
         help='Taxonomic rank for tree labeling (default: genus)'
+    )
+    grouped_parser.add_argument(
+        '--combined-tree-label-rank',
+        type=str,
+        default='genus',
+        choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
+        help='Taxonomic rank for tree labeling for the combined tree (default: genus)'
     )
     grouped_parser.add_argument(
         '--min-identity',

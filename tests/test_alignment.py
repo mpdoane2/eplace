@@ -653,7 +653,7 @@ query3\t0\t;;;;;\tgenus\tN/A\tN/A
                 query_fasta=query_fasta,
                 classification_file=classification_file,
                 blast_hits=blast_hits,
-                tree_label_rank='genus',
+                combined_tree_label_rank='genus',
                 num_threads=1
             )
             
@@ -744,7 +744,7 @@ query1\t5\tPseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriacea
                     query_fasta=query_fasta,
                     classification_file=classification_file,
                     blast_hits=blast_hits,
-                    tree_label_rank='genus',
+                    combined_tree_label_rank='genus',
                     num_threads=1
                 )
                 
