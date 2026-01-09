@@ -291,7 +291,8 @@ class IQTreeBuilder:
     def build_tree(
         alignment_fasta: Path,
         output_prefix: Path,
-        model: str = "MFP"
+        model: str = "MFP",
+        num_threads: int = None
     ) -> bool:
         """
         Build a phylogenetic tree using IQTree.
@@ -300,6 +301,7 @@ class IQTreeBuilder:
             alignment_fasta: Path to aligned FASTA file
             output_prefix: Prefix for output files
             model: Substitution model (default: "MFP" for automatic ModelFinder Plus selection)
+            num_threads: Number of threads to use (default: None, which uses AUTO)
             
         Returns:
             True if tree building was successful, False otherwise
@@ -319,7 +321,7 @@ class IQTreeBuilder:
             '-s', str(alignment_fasta),
             '-pre', str(output_prefix),
             '-m', model,
-            '-T', "AUTO"
+            '-T', str(num_threads) if num_threads else "AUTO"
         ]
         
         logger.info(f"Running IQTree: {' '.join(cmd)}")
@@ -1538,6 +1540,7 @@ def concatenate_all_groups_and_build_tree(
         if IQTreeBuilder.build_tree(
             alignment_fasta=alignment_fasta,
             output_prefix=tree_prefix,
+            num_threads=num_threads
         ):
             results['tree'] = tree_file
             logger.info(f"Tree saved to: {tree_file}")
