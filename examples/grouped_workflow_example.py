@@ -103,6 +103,14 @@ Notes:
     )
     
     parser.add_argument(
+        '--combined-tree-label-rank',
+        type=str,
+        default='genus',
+        choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
+        help='Taxonomic rank for tree labeling for the combined tree (default: genus)'
+    )
+    
+    parser.add_argument(
         '--min-identity',
         type=float,
         default=90.0,
@@ -202,6 +210,7 @@ Notes:
     logger.info(f"Representative rank: {args.rank}")
     logger.info(f"Grouping rank: {args.group_rank}")
     logger.info(f"Tree labeling rank: {args.tree_label_rank}")
+    logger.info(f"Combined tree labeling rank: {args.combined_tree_label_rank}")
     logger.info(f"Classification output file: {args.output_classification}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
@@ -471,7 +480,7 @@ Notes:
                 query_fasta=args.query_fasta,
                 classification_file=args.output_classification,
                 blast_hits=filtered_hits,
-                tree_label_rank=args.tree_label_rank,
+                combined_tree_label_rank=args.combined_tree_label_rank,
                 num_threads=args.num_threads
             )
             
