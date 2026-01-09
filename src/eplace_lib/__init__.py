@@ -34,7 +34,8 @@ from .alignment import (
     create_grouped_fasta_with_queries,
     trim_grouped_sequences,
     process_grouped_alignment_and_tree,
-    process_grouped_alignment_and_tree_parallel
+    process_grouped_alignment_and_tree_parallel,
+    concatenate_all_groups_and_build_tree
 )
 
 __all__ = [
@@ -59,5 +60,6 @@ __all__ = [
     "create_grouped_fasta_with_queries",
     "trim_grouped_sequences",
     "process_grouped_alignment_and_tree",
-    "process_grouped_alignment_and_tree_parallel"
+    "process_grouped_alignment_and_tree_parallel",
+    "concatenate_all_groups_and_build_tree"
 ]

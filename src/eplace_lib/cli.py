@@ -25,7 +25,8 @@ from .alignment import (
     check_alignment_consistency,
     group_hits_by_group_rank,
     create_grouped_fasta_with_queries,
-    IQTreeBuilder
+    IQTreeBuilder,
+    concatenate_all_groups_and_build_tree
 )
 
 # Configure logging
@@ -330,7 +331,7 @@ def grouped_command(args):
     logger.info("=" * 60)
     
     # Step 1: Read query sequences
-    logger.info("\n[Step 1/7] Reading query sequences...")
+    logger.info("\n[Step 1/9] Reading query sequences...")
     try:
         sequences = FastaReader.read_fasta(args.query_fasta)
         logger.info(f"Found {len(sequences)} query sequences")
@@ -341,7 +342,7 @@ def grouped_command(args):
         return 1
     
     # Step 2: Run BLAST search
-    logger.info("\n[Step 2/7] Running BLAST search...")
+    logger.info("\n[Step 2/9] Running BLAST search...")
     blast_output = args.output_dir / "blast_results.txt"
     
     try:
@@ -368,7 +369,7 @@ def grouped_command(args):
         return 1
     
     # Step 3: Process taxonomy information
-    logger.info(f"\n[Step 3/7] Processing taxonomy information (rank: {args.rank})...")
+    logger.info(f"\n[Step 3/9] Processing taxonomy information (rank: {args.rank})...")
     
     try:
         results = process_blast_results_for_taxonomy(
@@ -402,7 +403,7 @@ def grouped_command(args):
         return 1
 
     # Step 4: Check alignment consistency
-    logger.info("\n[Step 4/7] Checking alignment consistency...")
+    logger.info("\n[Step 4/9] Checking alignment consistency...")
     consistency = check_alignment_consistency(
         blast_hits=filtered_hits,
         tolerance=args.alignment_tolerance
@@ -418,7 +419,7 @@ def grouped_command(args):
         logger.info("All reference sequences have consistent alignments across queries")
 
     # Step 5: Group hits by group_rank
-    logger.info(f"\n[Step 5/7] Grouping hits by {args.group_rank}...")
+    logger.info(f"\n[Step 5/9] Grouping hits by {args.group_rank}...")
     grouped_hits = group_hits_by_group_rank(filtered_hits, args.group_rank)
     
     if not grouped_hits:
@@ -426,7 +427,7 @@ def grouped_command(args):
         return 1
 
     # Step 6: Create grouped FASTA files
-    logger.info(f"\n[Step 6/7] Creating grouped FASTA files...")
+    logger.info(f"\n[Step 6/9] Creating grouped FASTA files...")
     
     group_results = {}
     for group_tid, query_hits_map in grouped_hits.items():
@@ -471,7 +472,7 @@ def grouped_command(args):
 
     # Step 7: Build alignments and trees for each group
     if not args.skip_alignment:
-        logger.info("\n[Step 7/7] Building alignments and phylogenetic trees for each group...")
+        logger.info("\n[Step 7/9] Building alignments and phylogenetic trees for each group...")
         
         # Process all groups to do trimming and alignment
         # and start tree building in background
@@ -552,10 +553,10 @@ def grouped_command(args):
         
         logger.info(f"\nAlignment and tree building completed for {len(group_results)} groups")
     else:
-        logger.info("\n[Step 7/7] Skipping alignment and tree building (--skip-alignment)")
+        logger.info("\n[Step 7/9] Skipping alignment and tree building (--skip-alignment)")
 
     # Step 8: Generate classification summary TSV
-    logger.info("\nGenerating classification summary TSV file...")
+    logger.info("\n[Step 8/9] Generating classification summary TSV file...")
     try:
         success = generate_classification_summary(
             sequences=sequences,
@@ -572,6 +573,28 @@ def grouped_command(args):
             logger.warning("Failed to generate classification summary")
     except Exception as e:
         logger.error(f"Error generating classification summary: {e}")
+
+    # Step 9: Build combined tree from all groups
+    if not args.skip_alignment and group_results:
+        logger.info("\n[Step 9/9] Building combined tree from all groups...")
+        try:
+            combined_results = concatenate_all_groups_and_build_tree(
+                output_dir=args.output_dir,
+                query_fasta=args.query_fasta,
+                classification_file=args.output_classification,
+                blast_hits=filtered_hits,
+                tree_label_rank=args.tree_label_rank,
+                num_threads=args.num_threads
+            )
+            
+            if combined_results['alignment']:
+                logger.info(f"✓ Combined alignment: {combined_results['alignment']}")
+            if combined_results['tree']:
+                logger.info(f"✓ Combined tree: {combined_results['tree']}")
+            if combined_results['labeled_tree']:
+                logger.info(f"✓ Combined labeled tree: {combined_results['labeled_tree']}")
+        except Exception as e:
+            logger.error(f"Error building combined tree: {e}")
 
     logger.info("\n" + "=" * 60)
     logger.info("Grouped workflow completed successfully!")

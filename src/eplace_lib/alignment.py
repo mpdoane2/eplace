@@ -178,7 +178,8 @@ class MAFFTAligner:
         input_fasta: Path,
         output_fasta: Path,
         auto_orient: bool = True,
-        num_threads: int = 1
+        num_threads: int = 1,
+        strategy: str = 'default'
     ) -> bool:
         """
         Align sequences using MAFFT.
@@ -188,6 +189,11 @@ class MAFFTAligner:
             output_fasta: Path to output aligned FASTA file
             auto_orient: Use MAFFT's auto-orient feature (default: True)
             num_threads: Number of threads to use
+            strategy: MAFFT alignment strategy (default: 'default')
+                      Options: 'default', 'auto', 'retree2', 'fftns'
+                      'auto': Let MAFFT choose the best strategy automatically
+                      'retree2': Fast progressive method, good for large datasets
+                      'fftns': Fastest method for very large datasets
             
         Returns:
             True if alignment was successful, False otherwise
@@ -202,6 +208,17 @@ class MAFFTAligner:
         
         # Build MAFFT command
         cmd = ['mafft']
+        
+        # Add strategy-specific options
+        if strategy == 'auto':
+            cmd.append('--auto')
+        elif strategy == 'retree2':
+            cmd.append('--retree')
+            cmd.append('2')
+        elif strategy == 'fftns':
+            cmd.append('--retree')
+            cmd.append('1')
+        # 'default' uses MAFFT's default strategy (no special flag)
         
         # Add auto-orient option
         if auto_orient:
@@ -1365,5 +1382,190 @@ def process_grouped_alignment_and_tree_parallel(
                 logger.warning(f"Failed to relabel tree for group {group_name}, but unlabeled tree is available")
         else:
             logger.error(f"Failed to build tree for group {group_name}")
+    
+    return results
+
+
+def concatenate_all_groups_and_build_tree(
+    output_dir: Path,
+    query_fasta: Path,
+    classification_file: Path,
+    blast_hits: List[BlastHit],
+    tree_label_rank: str = "genus",
+    num_threads: int = 1
+) -> Dict[str, Optional[Path]]:
+    """
+    Concatenate all group _trimmed.fasta files, add queries with 0 blast hits,
+    build a final alignment and tree.
+    
+    This function:
+    1. Finds all *_trimmed.fasta files in group directories
+    2. Reads the classification file to identify queries with 0 blast hits
+    3. Concatenates all sequences into a single file
+    4. Uses MAFFT to build an alignment (with optimal parameters for many sequences)
+    5. Uses IQTree to build a phylogenetic tree
+    6. Relabels tree nodes with taxonomic names
+    
+    Args:
+        output_dir: Output directory containing group subdirectories
+        query_fasta: Original query FASTA file
+        classification_file: Path to classifications.tsv file
+        blast_hits: List of all BlastHit objects with taxonomy information
+        tree_label_rank: Taxonomic rank for tree labeling (default: genus)
+        num_threads: Number of threads for alignment and tree building (default: 1)
+        
+    Returns:
+        Dictionary with paths to generated files:
+            - 'combined_fasta': Combined sequences from all groups + zero-hit queries
+            - 'alignment': Aligned sequences
+            - 'tree': Phylogenetic tree
+            - 'labeled_tree': Tree with taxonomic labels
+    """
+    results = {
+        'combined_fasta': None,
+        'alignment': None,
+        'tree': None,
+        'labeled_tree': None
+    }
+    
+    logger.info("\n" + "=" * 60)
+    logger.info("Building combined tree from all groups")
+    logger.info("=" * 60)
+    
+    # Output file paths
+    combined_fasta = output_dir / "all_groups_combined.fasta"
+    alignment_fasta = output_dir / "all_groups_aligned.fasta"
+    tree_prefix = output_dir / "all_groups_tree"
+    tree_file = Path(str(tree_prefix) + ".treefile")
+    labeled_tree = output_dir / "all_groups_tree_labeled.treefile"
+    
+    try:
+        # Step 1: Find all group directories and their _trimmed.fasta files
+        logger.info("\n[Step 1/5] Finding all group trimmed FASTA files...")
+        trimmed_files = []
+        
+        # Look for directories in output_dir
+        for item in output_dir.iterdir():
+            if item.is_dir():
+                # Look for *_trimmed.fasta files in this directory
+                for fasta_file in item.glob("*_trimmed.fasta"):
+                    trimmed_files.append(fasta_file)
+                    logger.info(f"  Found: {fasta_file}")
+        
+        if not trimmed_files:
+            logger.error("No _trimmed.fasta files found in group directories")
+            return results
+        
+        logger.info(f"Found {len(trimmed_files)} trimmed FASTA files")
+        
+        # Step 2: Read classification file to find queries with 0 blast hits
+        logger.info("\n[Step 2/5] Identifying queries with 0 blast hits...")
+        zero_hit_queries = []
+        
+        if classification_file.exists():
+            with open(classification_file, 'r') as f:
+                # Skip header
+                next(f, None)
+                for line in f:
+                    parts = line.strip().split('\t')
+                    if len(parts) >= 2:
+                        query_id = parts[0]
+                        blast_hits_count = int(parts[1])
+                        if blast_hits_count == 0:
+                            zero_hit_queries.append(query_id)
+                            logger.info(f"  Query with 0 hits: {query_id}")
+        else:
+            logger.warning(f"Classification file not found: {classification_file}")
+        
+        if zero_hit_queries:
+            logger.info(f"Found {len(zero_hit_queries)} queries with 0 blast hits")
+        else:
+            logger.info("No queries with 0 blast hits")
+        
+        # Step 3: Concatenate all sequences
+        logger.info("\n[Step 3/5] Concatenating all sequences...")
+        
+        # Read original query sequences
+        query_sequences = FastaReader.read_fasta(query_fasta)
+        
+        # Track which sequences we've already written to avoid duplicates
+        written_sequences = set()
+        
+        with open(combined_fasta, 'w') as out:
+            # First, write all sequences from trimmed files
+            for trimmed_file in sorted(trimmed_files):
+                logger.info(f"  Reading: {trimmed_file}")
+                sequences = FastaReader.read_fasta(trimmed_file)
+                for seq_id, sequence in sequences.items():
+                    if seq_id not in written_sequences:
+                        out.write(f">{seq_id}\n")
+                        for i in range(0, len(sequence), 60):
+                            out.write(sequence[i:i+60] + "\n")
+                        written_sequences.add(seq_id)
+            
+            # Then, add queries with 0 blast hits
+            for query_id in zero_hit_queries:
+                if query_id in query_sequences and query_id not in written_sequences:
+                    query_seq = query_sequences[query_id]
+                    out.write(f">{query_id}\n")
+                    for i in range(0, len(query_seq), 60):
+                        out.write(query_seq[i:i+60] + "\n")
+                    written_sequences.add(query_id)
+                    logger.info(f"  Added zero-hit query: {query_id}")
+        
+        results['combined_fasta'] = combined_fasta
+        logger.info(f"Combined {len(written_sequences)} sequences into: {combined_fasta}")
+        
+        # Step 4: Align sequences with MAFFT (using optimal parameters for many sequences)
+        logger.info("\n[Step 4/5] Aligning sequences with MAFFT...")
+        logger.info("Using --auto mode for optimal alignment of large datasets")
+        
+        if MAFFTAligner.align_sequences(
+            input_fasta=combined_fasta,
+            output_fasta=alignment_fasta,
+            auto_orient=True,
+            num_threads=num_threads,
+            strategy='auto'  # Let MAFFT choose the best strategy
+        ):
+            results['alignment'] = alignment_fasta
+            logger.info(f"Alignment saved to: {alignment_fasta}")
+        else:
+            logger.error("Failed to align combined sequences")
+            return results
+        
+        # Step 5: Build phylogenetic tree with IQTree
+        logger.info("\n[Step 5/5] Building phylogenetic tree...")
+        if IQTreeBuilder.build_tree(
+            alignment_fasta=alignment_fasta,
+            output_prefix=tree_prefix,
+        ):
+            results['tree'] = tree_file
+            logger.info(f"Tree saved to: {tree_file}")
+            
+            # Relabel tree with taxonomic names
+            logger.info("Relabeling tree with taxonomic names...")
+            if IQTreeBuilder.relabel_tree_with_taxonomy(
+                tree_file=tree_file,
+                blast_hits=blast_hits,
+                output_tree=labeled_tree,
+                taxonomic_rank=tree_label_rank
+            ):
+                results['labeled_tree'] = labeled_tree
+                logger.info(f"Labeled tree saved to: {labeled_tree}")
+            else:
+                logger.warning("Failed to relabel tree, but unlabeled tree is available")
+        else:
+            logger.error("Failed to build phylogenetic tree")
+            return results
+        
+        logger.info("\n" + "=" * 60)
+        logger.info("Combined tree building completed successfully!")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"Error in concatenate_all_groups_and_build_tree: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return results
     
     return results
