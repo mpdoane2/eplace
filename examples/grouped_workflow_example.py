@@ -107,7 +107,7 @@ Notes:
         type=str,
         default='genus',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
-        help='Taxonomic rank for tree labeling for the combined tree (default: genus)'
+        help='Taxonomic rank to use for combined tree labeling (default: genus)'
     )
     
     parser.add_argument(
