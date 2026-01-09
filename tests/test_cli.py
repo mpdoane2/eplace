@@ -56,7 +56,8 @@ def test_cli_has_command_handlers():
     expected_handlers = {
         'download_command',
         'blast_command', 
-        'grouped_command'
+        'grouped_command',
+        'relabel_command'
     }
     found_handlers = set()
     
