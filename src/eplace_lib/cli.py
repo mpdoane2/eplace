@@ -1072,7 +1072,7 @@ Notes:
         '--blastdb-path',
         type=Path,
         default=None,
-        help='Path to BLAST database directory (not used but kept for consistency)'
+        help='Path to BLAST database directory (optional, not required for relabeling)'
     )
     
     # Parse arguments
