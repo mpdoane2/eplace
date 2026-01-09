@@ -441,6 +441,79 @@ class TestIQTreeBuilder:
             content = output_tree.read_text()
             assert 'Salmonella' in content
             assert 'Escherichia_coli' in content  # Spaces replaced with underscores
+    
+    def test_relabel_tree_with_reversed_sequences(self):
+        """Test relabeling tree with reversed sequences (MAFFT _R_ prefix)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create test tree with _R_ prefix on subject2 (reversed by MAFFT)
+            tree_file = tmppath / "tree.treefile"
+            tree_content = "(subject1:0.1,_R_subject2:0.2,query1:0.0);"
+            tree_file.write_text(tree_content)
+            
+            # Create BLAST hits with taxonomy
+            blast_hits = [
+                BlastHit(
+                    query_id='query1',
+                    subject_id='subject1',
+                    percent_identity=95.0,
+                    alignment_length=30,
+                    query_length=36,
+                    subject_length=40,
+                    query_start=1,
+                    query_end=30,
+                    subject_start=6,
+                    subject_end=35,
+                    evalue=1e-10,
+                    bit_score=100,
+                    query_coverage=83.3,
+                    subject_taxid="12345",
+                    subject_taxids="12345",
+                    subject_taxonomy=self.salmonella_taxonomy
+                ),
+                BlastHit(
+                    query_id='query1',
+                    subject_id='subject2',
+                    percent_identity=90.0,
+                    alignment_length=20,
+                    query_length=36,
+                    subject_length=30,
+                    query_start=5,
+                    query_end=24,
+                    subject_start=1,
+                    subject_end=20,
+                    evalue=1e-8,
+                    bit_score=80,
+                    query_coverage=55.6,
+                    subject_taxid="67890",
+                    subject_taxids="67890",
+                    subject_taxonomy=self.ecoli_taxonomy
+                )
+            ]
+            
+            output_tree = tmppath / "tree_labeled.treefile"
+            
+            # Relabel tree
+            success = IQTreeBuilder.relabel_tree_with_taxonomy(
+                tree_file=tree_file,
+                blast_hits=blast_hits,
+                output_tree=output_tree,
+                taxonomic_rank='species'
+            )
+            
+            assert success is True
+            assert output_tree.exists()
+            
+            # Verify labels were replaced
+            content = output_tree.read_text()
+            # subject1 should be normal
+            assert 'Salmonella_enterica:0.1' in content
+            # subject2 should have _R suffix (reversed)
+            assert 'Escherichia_coli_R:0.2' in content
+            # query should remain unchanged
+            assert 'query1:0.0' in content
+
 
 
 class TestProcessQueryAlignmentAndTree:

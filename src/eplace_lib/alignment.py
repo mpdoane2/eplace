@@ -544,10 +544,20 @@ class IQTreeBuilder:
             
             # Replace sequence IDs with taxonomic names
             for seq_id, tax_name in label_map.items():
-                # Handle different possible formats in the tree
+                # Handle normal sequences (not reversed)
                 tree_string = tree_string.replace(f"({seq_id}:", f"({tax_name}:")
                 tree_string = tree_string.replace(f",{seq_id}:", f",{tax_name}:")
                 tree_string = tree_string.replace(f" {seq_id}:", f" {tax_name}:")
+                
+                # Handle sequences with _R_ prefix (reversed by MAFFT)
+                # MAFFT prepends _R_ to sequence IDs when it adjusts direction
+                # We need to remove _R_ to find the correct ID, then append "_R" to the label
+                # (using underscore to maintain Newick format compliance, representing " R")
+                reversed_seq_id = f"_R_{seq_id}"
+                reversed_label = f"{tax_name}_R"
+                tree_string = tree_string.replace(f"({reversed_seq_id}:", f"({reversed_label}:")
+                tree_string = tree_string.replace(f",{reversed_seq_id}:", f",{reversed_label}:")
+                tree_string = tree_string.replace(f" {reversed_seq_id}:", f" {reversed_label}:")
             
             # Write the relabeled tree
             with open(output_tree, 'w') as f:

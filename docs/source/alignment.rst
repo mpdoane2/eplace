@@ -143,6 +143,25 @@ Example aligned FASTA:
    >_R_representative_2
    ATGC-ATGCATGC
 
+Tree Labeling
+~~~~~~~~~~~~~
+
+When phylogenetic trees are labeled with taxonomic names, sequences that were reverse-complemented by MAFFT (marked with ``_R_`` prefix) will have ``_R`` appended to their taxonomic label. This allows you to identify which sequences were reverse-complemented during alignment.
+
+Example tree before relabeling:
+
+.. code-block:: text
+
+   (MZ387488.1:0.1,_R_CP123456.1:0.2,query:0.0);
+
+Example tree after relabeling:
+
+.. code-block:: text
+
+   (Salmonella:0.1,Escherichia_R:0.2,query:0.0);
+
+The ``_R`` suffix indicates that the Escherichia sequence was reverse-complemented during alignment.
+
 Troubleshooting
 ---------------
 
