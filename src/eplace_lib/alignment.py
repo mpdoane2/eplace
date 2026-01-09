@@ -419,7 +419,7 @@ class IQTreeBuilder:
             timeout: Maximum time to wait for each individual job in seconds (default: 7200 = 2 hours)
             
         Returns:
-            Dictionary mapping output_prefix to success status (True/False)
+            Dictionary mapping tree_file path to success status (True/False)
         """
         results = {}
         
@@ -438,17 +438,17 @@ class IQTreeBuilder:
                 
                 if process.returncode != 0:
                     logger.error(f"IQTree failed for {output_prefix} with error: {stderr}")
-                    results[str(output_prefix)] = False
+                    results[str(tree_file)] = False
                     continue
                 
                 # Check if tree file was created
                 if not tree_file.exists():
                     logger.error(f"IQTree did not produce a tree file for {output_prefix}")
-                    results[str(output_prefix)] = False
+                    results[str(tree_file)] = False
                     continue
                 
                 logger.info(f"IQTree completed successfully for {output_prefix}. Tree: {tree_file}")
-                results[str(output_prefix)] = True
+                results[str(tree_file)] = True
                 
             except subprocess.TimeoutExpired:
                 logger.error(f"IQTree timed out for {output_prefix} after {timeout} seconds")
@@ -458,7 +458,7 @@ class IQTreeBuilder:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     logger.error(f"Failed to terminate IQTree process for {output_prefix}")
-                results[str(output_prefix)] = False
+                results[str(tree_file)] = False
             except Exception as e:
                 logger.error(f"Error waiting for IQTree job {output_prefix}: {e}")
                 # Ensure process is cleaned up
@@ -468,7 +468,7 @@ class IQTreeBuilder:
                         process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
                         pass
-                results[str(output_prefix)] = False
+                results[str(tree_file)] = False
         
         successful = sum(1 for success in results.values() if success)
         logger.info(f"Completed {successful}/{len(jobs)} IQTree jobs successfully")
