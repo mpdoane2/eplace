@@ -110,6 +110,21 @@ Group queries by taxonomic classification:
 
 This groups queries that match to the same family and creates one tree per group.
 
+Relabel Existing Trees
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Relabel an existing tree with taxonomic names at different ranks:
+
+.. code-block:: bash
+
+   # Relabel tree with genus names
+   eplace relabel blast_results.txt input.treefile output_genus.treefile --rank genus
+   
+   # Relabel tree with species names (binomial nomenclature)
+   eplace relabel blast_results.txt input.treefile output_species.treefile --rank species
+
+This is useful when you want to create multiple versions of the same tree with different taxonomic labels without rebuilding the tree.
+
 BLAST Only (No Alignment)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -278,6 +293,7 @@ For detailed command-line options, see:
 * ``eplace download --help`` - Download command help
 * ``eplace blast --help`` - BLAST command help
 * ``eplace grouped --help`` - Grouped command help
+* ``eplace relabel --help`` - Relabel command help
 
 Next Steps
 ----------
