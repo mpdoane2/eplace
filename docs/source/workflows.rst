@@ -114,6 +114,10 @@ Process
       e. Extract and trim sequences
       f. Align all sequences together
       g. Build single phylogenetic tree
+   6. Build combined tree from all groups (optional):
+      a. Combine representatives from all groups
+      b. Align combined sequences
+      c. Build phylogenetic tree showing relationships across all groups
 
 Output Structure
 ~~~~~~~~~~~~~~~~
@@ -134,6 +138,10 @@ Output Structure
    │   └── Bacteria_Proteobacteria_tree.treefile
    ├── Bacteria_Firmicutes/
    │   └── ...
+   ├── combined_all_groups_trimmed.fasta           # Combined from all groups
+   ├── combined_all_groups_aligned.fasta           # Alignment of combined sequences
+   ├── combined_all_groups_tree.treefile           # Combined phylogenetic tree
+   ├── combined_all_groups_tree_labeled.treefile   # Combined tree with labels
    └── ...
 
 Usage Example
@@ -278,6 +286,13 @@ Both workflows use taxonomic ranks to organize results:
   * Options: ``phylum``, ``class``, ``order``, ``family``, ``genus``, ``species``
   * Default: ``genus``
   * Determines taxonomic labels on phylogenetic tree
+
+* ``--combined-tree-label-rank`` (grouped only): Level at which to label the combined tree
+
+  * Options: ``phylum``, ``class``, ``order``, ``family``, ``genus``, ``species``
+  * Default: ``genus``
+  * Controls labels on the combined tree built from all groups
+  * Can be different from ``--tree-label-rank`` for more flexibility
 
 Filtering Parameters
 ~~~~~~~~~~~~~~~~~~~~

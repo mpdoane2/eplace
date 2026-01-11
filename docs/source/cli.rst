@@ -250,6 +250,14 @@ Taxonomy Options
    
    Default: ``genus``
 
+.. option:: --combined-tree-label-rank {phylum,class,order,family,genus,species}
+
+   Taxonomic rank for labeling the combined tree
+   
+   Default: ``genus``
+   
+   The grouped workflow creates a combined tree from all groups. This parameter controls the taxonomic rank used for labeling that combined tree.
+
 Filtering Options
 ^^^^^^^^^^^^^^^^^
 
@@ -342,6 +350,10 @@ Output Structure
    │   ├── Taxonomic_Group_1_tree.treefile         # Phylogenetic tree
    │   ├── Taxonomic_Group_1_tree_labeled.treefile # Tree with taxonomic labels
    │   └── Taxonomic_Group_1_tree.* (other IQTree files)
+   ├── combined_all_groups_trimmed.fasta           # Combined alignment of all groups
+   ├── combined_all_groups_aligned.fasta           # Multiple sequence alignment
+   ├── combined_all_groups_tree.treefile           # Combined phylogenetic tree
+   ├── combined_all_groups_tree_labeled.treefile   # Combined tree with taxonomic labels
    └── ...
 
 eplace relabel
