@@ -6,7 +6,7 @@ ePLACE provides two main workflow types for analyzing environmental DNA sequence
 Workflow Overview
 -----------------
 
-Both workflows follow a similar pipeline but differ in how they organize and analyze query sequences.
+ePLACE provides two main workflow types for analyzing environmental DNA sequences: **Individual** and **Grouped** workflows. Additionally, the **Relabel** command allows you to post-process phylogenetic trees with taxonomic labels.
 
 Common Pipeline Steps
 ~~~~~~~~~~~~~~~~~~~~~
@@ -19,6 +19,7 @@ Common Pipeline Steps
 6. **Sequence Trimming** - Trim to aligned regions based on BLAST coordinates
 7. **Multiple Sequence Alignment** - Align using MAFFT (optional)
 8. **Phylogenetic Tree Building** - Build trees using IQTree (optional)
+9. **Tree Relabeling** - Relabel trees with taxonomic names (optional or standalone)
 
 Individual Workflow
 -------------------
@@ -159,26 +160,96 @@ Usage Example
        --min-coverage 85 \
        --num-threads 4
 
+Relabel Workflow
+----------------
+
+The relabel workflow (``eplace relabel``) allows you to post-process existing phylogenetic trees by replacing sequence IDs with taxonomic names.
+
+When to Use
+~~~~~~~~~~~
+
+* You have an existing phylogenetic tree that needs taxonomic labels
+* You want to create multiple versions of a tree with different taxonomic ranks
+* You built a tree with external tools (RAxML, FastTree, etc.) and want to add taxonomic labels
+* You need to update tree labels after taxonomy database updates
+* You want to avoid rebuilding trees just to change label granularity
+
+Process
+~~~~~~~
+
+.. code-block:: text
+
+   1. Parse BLAST results to get taxonomy information
+   2. Read existing phylogenetic tree (Newick format)
+   3. Create mapping of sequence IDs to taxonomic names
+   4. Replace sequence IDs with taxonomic labels at specified rank
+   5. Clean labels for Newick format compatibility
+   6. Write relabeled tree to output file
+
+Required Inputs
+~~~~~~~~~~~~~~~
+
+* **BLAST Results**: File containing BLAST hits with taxonomy information
+* **Tree File**: Existing phylogenetic tree in Newick format
+* **Output Path**: Where to save the relabeled tree
+
+Output
+~~~~~~
+
+A new Newick format tree file with taxonomic labels replacing sequence accession numbers.
+
+Usage Examples
+~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   # Basic relabeling with genus names (default)
+   eplace relabel blast_results.txt input.treefile output.treefile
+   
+   # Relabel with species names (binomial nomenclature)
+   eplace relabel blast_results.txt input.treefile species_tree.treefile --rank species
+   
+   # Create multiple versions at different ranks
+   eplace relabel blast_results.txt tree.treefile genus_tree.treefile --rank genus
+   eplace relabel blast_results.txt tree.treefile family_tree.treefile --rank family
+   eplace relabel blast_results.txt tree.treefile order_tree.treefile --rank order
+   
+   # Use with trees from external tools
+   eplace relabel blast_results.txt raxml_tree.nwk labeled_tree.nwk --rank genus
+
+Advantages
+~~~~~~~~~~
+
+* **Fast**: No tree rebuilding required
+* **Flexible**: Easily create trees with different taxonomic granularity
+* **Compatible**: Works with trees from any phylogenetic tool
+* **Preserves Topology**: Maintains original tree structure
+* **Format Support**: Handles standard Newick format and MAFFT-oriented sequences
+
 Comparison
 ----------
 
-+-----------------------+-------------------------+-------------------------+
-| Feature               | Individual              | Grouped                 |
-+=======================+=========================+=========================+
-| Analysis unit         | Per query               | Per taxonomic group     |
-+-----------------------+-------------------------+-------------------------+
-| Trees generated       | One per query           | One per group           |
-+-----------------------+-------------------------+-------------------------+
-| Alignment scope       | Query + its refs        | All queries + unique    |
-|                       |                         | refs in group           |
-+-----------------------+-------------------------+-------------------------+
-| Best for              | Diverse sequences       | Related sequences       |
-+-----------------------+-------------------------+-------------------------+
-| Computational cost    | Higher (more trees)     | Lower (fewer trees)     |
-+-----------------------+-------------------------+-------------------------+
-| Interpretation        | Independent per query   | Comparative across      |
-|                       |                         | queries                 |
-+-----------------------+-------------------------+-------------------------+
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Feature               | Individual              | Grouped                 | Relabel                 |
++=======================+=========================+=========================+=========================+
+| Analysis unit         | Per query               | Per taxonomic group     | Existing tree           |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Trees generated       | One per query           | One per group           | N/A (modifies existing) |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Alignment scope       | Query + its refs        | All queries + unique    | N/A                     |
+|                       |                         | refs in group           |                         |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Best for              | Diverse sequences       | Related sequences       | Post-processing trees   |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Computational cost    | Higher (more trees)     | Lower (fewer trees)     | Minimal (no rebuild)    |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Interpretation        | Independent per query   | Comparative across      | Visual/taxonomic labels |
+|                       |                         | queries                 |                         |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| BLAST required        | Yes                     | Yes                     | Yes (for taxonomy)      |
++-----------------------+-------------------------+-------------------------+-------------------------+
+| Tree building         | Yes                     | Yes                     | No (uses existing)      |
++-----------------------+-------------------------+-------------------------+-------------------------+
 
 Workflow Parameters
 -------------------
@@ -280,6 +351,24 @@ Fine-tune workflow behavior:
 
 Advanced Usage
 --------------
+
+Combining Workflows with Relabel
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use relabel to create multiple tree versions from workflow outputs:
+
+.. code-block:: bash
+
+   # Run workflow once
+   eplace blast queries.fasta output --rank genus
+   
+   # Create trees with different label ranks
+   cd output/query1
+   eplace relabel ../../output/blast_results_annotated.txt query1_tree.treefile query1_genus.treefile --rank genus
+   eplace relabel ../../output/blast_results_annotated.txt query1_tree.treefile query1_family.treefile --rank family
+   eplace relabel ../../output/blast_results_annotated.txt query1_tree.treefile query1_species.treefile --rank species
+
+This approach is efficient because you only build the tree once, then relabel it multiple times.
 
 Chaining Analyses
 ~~~~~~~~~~~~~~~~~
