@@ -29,6 +29,7 @@ ePLACE provides a comprehensive toolkit for environmental DNA analysis with the 
 * **Sequence Trimming**: Trim reference sequences to aligned regions based on BLAST coordinates
 * **Multiple Sequence Alignment**: Align sequences using MAFFT with auto-orientation
 * **Phylogenetic Trees**: Build and label phylogenetic trees using IQTree
+* **Tree Relabeling**: Relabel existing trees with taxonomic names at different ranks
 * **Results Summary Output**: Creates a tab separated output that summarises the per-sequence matches
 
 Quick Start
@@ -62,6 +63,9 @@ Basic Usage
 
    # Run grouped analysis
    eplace grouped query.fasta output_dir --group-rank order
+   
+   # Relabel existing tree with taxonomic names
+   eplace relabel blast_results.txt input.treefile output.treefile --rank genus
 
 Table of Contents
 -----------------

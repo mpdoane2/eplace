@@ -25,6 +25,7 @@ For all the features available, [please check out readthedocs](https://eplace.re
 - **Sequence Trimming**: Trim reference sequences to aligned regions based on BLAST coordinates
 - **Multiple Sequence Alignment**: Align sequences using MAFFT with auto-orientation
 - **Phylogenetic Trees**: Build and label phylogenetic trees using IQTree
+- **Tree Relabeling**: Relabel existing trees with taxonomic names at different ranks
 - **Results Summary Output**: Creates a tab separated output that summarises the per-sequence matches.
 
 ## Installation
@@ -103,7 +104,7 @@ After installation, the `eplace` command will be available in your environment.
 
 ## Quick Start
 
-ePLACE provides a unified command-line interface with three main commands:
+ePLACE provides a unified command-line interface with four main commands:
 
 ### 1. Download NCBI Database
 
@@ -155,6 +156,24 @@ eplace grouped query.fasta output_dir --rank genus --group-rank family
 eplace grouped --help
 ```
 
+### 4. Relabel Phylogenetic Trees
+
+Relabel an existing phylogenetic tree with taxonomic names from BLAST results:
+
+```bash
+# Relabel tree with genus names
+eplace relabel blast_results.txt input.treefile output.treefile --rank genus
+
+# Relabel tree with species names (genus + species)
+eplace relabel blast_results.txt input.treefile output.treefile --rank species
+
+# Relabel tree with family names
+eplace relabel blast_results.txt input.treefile output.treefile --rank family
+
+# Show help
+eplace relabel --help
+```
+
 ### Using the Library API
 
 You can also use ePLACE as a Python library:
@@ -188,7 +207,7 @@ results = process_blast_results_for_taxonomy(
 
 ## Command-Line Interface
 
-The `eplace` command provides three subcommands:
+The `eplace` command provides four subcommands:
 
 ### eplace download
 
@@ -249,6 +268,7 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 - `--rank {phylum,class,order,family,genus,species}`: Taxonomic rank for representative selection (default: genus)
 - `--group-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for grouping sequences (default: class)
 - `--tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for tree labeling (default: genus)
+- `--combined-tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for labeling the combined tree (default: genus)
 - `--min-identity FLOAT`: Minimum percent identity for BLAST hits (default: 90.0)
 - `--min-coverage FLOAT`: Minimum query coverage percentage (default: 80.0)
 - `--database NAME`: BLAST database name (default: core_nt)
@@ -258,6 +278,55 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 - `--skip-alignment`: Skip alignment and tree building steps
 - `--alignment-tolerance INT`: Maximum coordinate difference for alignment consistency (default: 50)
 - `--output-classification PATH`: Path to output classification TSV file
+
+**Note:** The grouped workflow creates a combined tree from all groups in addition to individual group trees. The combined tree includes representatives from all taxonomic groups and can be labeled at a different rank using `--combined-tree-label-rank`.
+
+### eplace relabel
+
+Relabel a phylogenetic tree with taxonomic names from BLAST results. This is useful when you have an existing tree and want to replace sequence IDs with taxonomic names, or when you want to relabel a tree at a different taxonomic rank.
+
+**Usage:**
+```bash
+eplace relabel BLAST_OUTPUT TREE_FILE OUTPUT_TREE [OPTIONS]
+```
+
+**Required Arguments:**
+- `BLAST_OUTPUT`: Path to BLAST output file (tabular format with taxonomy)
+- `TREE_FILE`: Path to input tree file (Newick format)
+- `OUTPUT_TREE`: Path to output relabeled tree file
+
+**Optional Arguments:**
+- `--rank {phylum,class,order,family,genus,species}`: Taxonomic rank for tree labeling (default: genus)
+- `--blastdb-path PATH`: Path to BLAST database directory (optional, not required for relabeling)
+
+**Key Features:**
+- Supports all standard taxonomic ranks from phylum to species
+- Handles species names as "genus species" format for binomial nomenclature
+- Preserves tree topology while updating labels
+- Works with Newick format trees
+- Handles reversed sequences (with _R_ prefix from MAFFT)
+- Cleans labels for Newick format compatibility
+
+**Examples:**
+```bash
+# Relabel tree with genus names (default)
+eplace relabel blast_results.txt input.treefile output_labeled.treefile
+
+# Relabel tree with species names (genus + species binomial)
+eplace relabel blast_results.txt input.treefile output_species.treefile --rank species
+
+# Relabel tree with family names
+eplace relabel blast_results.txt input.treefile output_family.treefile --rank family
+
+# Relabel tree using custom BLAST database location
+eplace relabel blast_results.txt input.treefile output.treefile --rank genus --blastdb-path /path/to/blastdb
+```
+
+**Use Cases:**
+- Re-label trees at different taxonomic ranks without rebuilding
+- Add taxonomic labels to trees from external phylogenetic tools
+- Create multiple versions of the same tree with different label granularity
+- Update tree labels when taxonomy information changes
 
 ## Documentation
 
@@ -382,6 +451,7 @@ The grouped workflow adds an additional step:
 8. **Trim Sequences**: Trim references to aligned regions
 9. **Check Consistency**: Verify BLAST hits align to similar locations on references
 10. **Align and Build Trees**: Create one alignment and tree per taxonomic group
+11. **Build Combined Tree**: Create a combined tree from all groups with all queries and representatives
 
 ## Output Structure
 
@@ -423,6 +493,10 @@ output_dir/
 │   └── Taxonomic_Group_1_tree.* (other IQTree files)
 ├── Taxonomic_Group_2/
 │   └── ...
+├── combined_all_groups_trimmed.fasta           # Combined alignment of all groups
+├── combined_all_groups_aligned.fasta           # Multiple sequence alignment
+├── combined_all_groups_tree.treefile           # Combined phylogenetic tree
+├── combined_all_groups_tree_labeled.treefile   # Combined tree with taxonomic labels
 └── ...
 ```
 
