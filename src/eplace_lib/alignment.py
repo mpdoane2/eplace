@@ -312,7 +312,7 @@ class IQTreeBuilder:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=7200  # 2 hour timeout (increased from 1 hour to handle larger datasets)
+                timeout=14400  # 4 hour timeout (increased from 1 hour to handle larger datasets)
             )
             
             if result.returncode != 0:
@@ -405,7 +405,7 @@ class IQTreeBuilder:
     @staticmethod
     def wait_for_tree_jobs(
         jobs: List[Dict],
-        timeout: int = 7200
+        timeout: int = 14400
     ) -> Dict[str, bool]:
         """
         Wait for multiple IQTree jobs to complete.
@@ -416,7 +416,8 @@ class IQTreeBuilder:
         
         Args:
             jobs: List of job dictionaries returned by build_tree_background()
-            timeout: Maximum time to wait for each individual job in seconds (default: 7200 = 2 hours)
+            timeout: Maximum time to wait for each individual job in seconds (default: 14400 = 4 hours)
+                     Increased because of mega tree created at the end!
             
         Returns:
             Dictionary mapping tree_file path to success status (True/False)
