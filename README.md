@@ -37,27 +37,26 @@ For all the features available, [please check out readthedocs](https://eplace.re
 Using pip:
 
 ```bash
-# create a new python environment
-python -m venv venv
-source venv/bin/activate
+# create and activate a mamba environment
+mamba create -yn eplace bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+mamba activate eplace
+
 pip install eplace
 ```
 
 ### For development (not recommended)
 
 ```bash
+# create and activate a mamba environment
+mamba create -yn eplace bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+mamba activate eplace
+
 # Clone the repository
 git clone https://github.com/linsalrob/eplace.git
 cd eplace
 
 # Install the package
-pip install .
-
-# Or install in development mode
 pip install -e .
-
-# Or with development dependencies
-pip install -e ".[dev]"
 ```
 
 After installation, the `eplace` command will be available in your environment.
