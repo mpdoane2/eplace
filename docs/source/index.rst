@@ -39,6 +39,9 @@ Installation
 ~~~~~~~~~~~~
 
 .. code-block:: bash
+   # create and activate a mamba environment
+   mamba create -yn eplace bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+   mamba activate eplace
 
    # Clone the repository
    git clone https://github.com/linsalrob/eplace.git
@@ -48,7 +51,7 @@ Installation
    pip install .
 
    # Or install in development mode
-   pip install -e .
+   pip install -e .[dev]
 
 Basic Usage
 ~~~~~~~~~~~
