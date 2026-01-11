@@ -292,6 +292,141 @@ def blast_command(args):
     return 0
 
 
+def relabel_command(args):
+    """Handle the relabel subcommand - relabel tree with taxonomy."""
+    # Validate input files
+    if not args.blast_output.exists():
+        logger.error(f"BLAST output file not found: {args.blast_output}")
+        return 1
+    
+    if not args.tree_file.exists():
+        logger.error(f"Tree file not found: {args.tree_file}")
+        return 1
+    
+    logger.info("=" * 60)
+    logger.info("ePLACE Tree Relabeling")
+    logger.info("=" * 60)
+    logger.info(f"BLAST output: {args.blast_output}")
+    logger.info(f"Tree file: {args.tree_file}")
+    logger.info(f"Taxonomic rank: {args.rank}")
+    logger.info(f"Output tree: {args.output_tree}")
+    logger.info("=" * 60)
+    
+    # Step 1: Parse BLAST results
+    logger.info("\n[Step 1/3] Parsing BLAST results...")
+    try:
+        from .blast_analysis import BlastRunner
+        runner = BlastRunner(blastdb_path=args.blastdb_path)
+        blast_hits = runner.parse_blast_results(args.blast_output)
+        logger.info(f"Found {len(blast_hits)} BLAST hits")
+    except Exception:
+        logger.exception("Error parsing BLAST results")
+        return 1
+    
+    # Step 2: Extract taxonomy information
+    logger.info("\n[Step 2/3] Extracting taxonomy information...")
+    try:
+        from .taxonomy import TaxonomyExtractor
+        tax_extractor = TaxonomyExtractor()
+        
+        # Get all unique subject tax IDs
+        subject_taxids = {hit.subject_taxid for hit in blast_hits}
+        logger.info(f"Found {len(subject_taxids)} unique taxonomy IDs")
+        
+        # Parse taxonomic information
+        tax_dict = tax_extractor.parse_taxids(list(subject_taxids))
+        
+        # Add taxonomy to all hits
+        for hit in blast_hits:
+            hit.subject_taxonomy = tax_dict.get(hit.subject_taxid)
+        
+        logger.info(f"Taxonomy information added to all hits")
+    except Exception:
+        logger.exception("Error extracting taxonomy information")
+        return 1
+    
+    # Step 3: Relabel tree
+    logger.info("\n[Step 3/3] Relabeling tree...")
+    try:
+        # Read the tree file
+        with open(args.tree_file, 'r') as f:
+            tree_string = f.read()
+        
+        # Create mapping of sequence accession to taxonomic name
+        label_map = {}
+        for hit in blast_hits:
+            accession = hit.get_accession()
+            
+            if not hit.subject_taxonomy:
+                logger.warning(f"No taxonomy found for {hit.subject_id}")
+                continue
+            
+            # Handle special case for species rank - use "genus species"
+            if args.rank == 'species':
+                genus_info = hit.subject_taxonomy.get('genus')
+                species_info = hit.subject_taxonomy.get('species')
+                
+                if genus_info and species_info:
+                    genus_name = genus_info[1]
+                    species_name = species_info[1]
+                    label = f"{genus_name} {species_name}"
+                elif species_info:
+                    label = species_info[1]
+                elif genus_info:
+                    label = genus_info[1]
+                else:
+                    logger.warning(f"No genus or species taxonomy for {hit.subject_id}")
+                    continue
+            else:
+                # For other ranks, just use the rank name
+                if args.rank not in hit.subject_taxonomy:
+                    logger.warning(f"Rank {args.rank} not found for {hit.subject_id}")
+                    continue
+                label = hit.subject_taxonomy[args.rank][1]
+            
+            # Clean up the label for tree format (Newick format constraints)
+            clean_label = (label.replace(' ', '_')
+                          .replace(':', '_')
+                          .replace('(', '_')
+                          .replace(')', '_')
+                          .replace(',', '_')
+                          .replace(';', '_'))
+            
+            label_map[accession] = clean_label
+        
+        logger.info(f"Created label mapping for {len(label_map)} sequences")
+        
+        # Replace sequence IDs with taxonomic names
+        for seq_id, tax_name in label_map.items():
+            # Handle normal sequences (not reversed)
+            tree_string = tree_string.replace(f"({seq_id}:", f"({tax_name}:")
+            tree_string = tree_string.replace(f",{seq_id}:", f",{tax_name}:")
+            tree_string = tree_string.replace(f" {seq_id}:", f" {tax_name}:")
+            
+            # Handle sequences with _R_ prefix (reversed by MAFFT)
+            reversed_seq_id = f"_R_{seq_id}"
+            reversed_label = f"{tax_name}_R"
+            tree_string = tree_string.replace(f"({reversed_seq_id}:", f"({reversed_label}:")
+            tree_string = tree_string.replace(f",{reversed_seq_id}:", f",{reversed_label}:")
+            tree_string = tree_string.replace(f" {reversed_seq_id}:", f" {reversed_label}:")
+        
+        # Write the relabeled tree
+        with open(args.output_tree, 'w') as f:
+            f.write(tree_string)
+        
+        logger.info(f"✓ Relabeled tree saved to: {args.output_tree}")
+        
+    except Exception:
+        logger.exception("Error relabeling tree")
+        return 1
+    
+    logger.info("\n" + "=" * 60)
+    logger.info("Tree relabeling completed successfully!")
+    logger.info("=" * 60)
+    
+    return 0
+
+
 def grouped_command(args):
     """Handle the grouped subcommand - grouped workflow."""
     # Validate input file
@@ -621,10 +756,14 @@ Examples:
   # Run grouped BLAST workflow
   eplace grouped query.fasta output_dir --group-rank order
   
+  # Relabel a tree with taxonomic names
+  eplace relabel blast_results.txt input.treefile output.treefile --rank genus
+  
 For detailed help on each subcommand:
   eplace download --help
   eplace blast --help
   eplace grouped --help
+  eplace relabel --help
 
 Documentation: https://github.com/linsalrob/eplace
         """
@@ -884,6 +1023,58 @@ Notes:
         help='Path to output classification TSV file'
     )
     
+    # Relabel subcommand
+    relabel_parser = subparsers.add_parser(
+        'relabel',
+        help='Relabel tree with taxonomic names from BLAST results',
+        description='Relabel phylogenetic tree nodes with taxonomic names',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Relabel tree with genus names
+  eplace relabel blast_results.txt input.treefile output.treefile --rank genus
+  
+  # Relabel tree with species names (genus + species)
+  eplace relabel blast_results.txt input.treefile output.treefile --rank species
+  
+  # Relabel tree with family names
+  eplace relabel blast_results.txt input.treefile output.treefile --rank family
+
+Notes:
+  - BLAST results must be in tabular format with taxonomy information
+  - When using --rank species, the output will use "genus species" format
+  - Tree file must be in Newick format
+        """
+    )
+    relabel_parser.add_argument(
+        'blast_output',
+        type=Path,
+        help='Path to BLAST output file (tabular format with taxonomy)'
+    )
+    relabel_parser.add_argument(
+        'tree_file',
+        type=Path,
+        help='Path to input tree file (Newick format)'
+    )
+    relabel_parser.add_argument(
+        'output_tree',
+        type=Path,
+        help='Path to output relabeled tree file'
+    )
+    relabel_parser.add_argument(
+        '--rank',
+        type=str,
+        default='genus',
+        choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
+        help='Taxonomic rank for tree labeling (default: genus)'
+    )
+    relabel_parser.add_argument(
+        '--blastdb-path',
+        type=Path,
+        default=None,
+        help='Path to BLAST database directory (optional, not required for relabeling)'
+    )
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -899,6 +1090,8 @@ Notes:
         return blast_command(args)
     elif args.command == 'grouped':
         return grouped_command(args)
+    elif args.command == 'relabel':
+        return relabel_command(args)
     else:
         parser.print_help()
         return 1
