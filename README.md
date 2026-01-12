@@ -267,7 +267,7 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 - `--rank {phylum,class,order,family,genus,species}`: Taxonomic rank for representative selection (default: genus)
 - `--group-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for grouping sequences (default: class)
 - `--tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for tree labeling (default: genus)
-- `--combined-tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for labeling the combined tree (default: genus)
+- `--combined-tree-label-rank {phylum,class,order,family,genus,species}`: Taxonomic rank for labeling the combined tree. If not provided, the combined tree will not be built (optional)
 - `--min-identity FLOAT`: Minimum percent identity for BLAST hits (default: 90.0)
 - `--min-coverage FLOAT`: Minimum query coverage percentage (default: 80.0)
 - `--database NAME`: BLAST database name (default: core_nt)
@@ -278,7 +278,7 @@ eplace grouped QUERY_FASTA OUTPUT_DIR [OPTIONS]
 - `--alignment-tolerance INT`: Maximum coordinate difference for alignment consistency (default: 50)
 - `--output-classification PATH`: Path to output classification TSV file
 
-**Note:** The grouped workflow creates a combined tree from all groups in addition to individual group trees. The combined tree includes representatives from all taxonomic groups and can be labeled at a different rank using `--combined-tree-label-rank`.
+**Note:** The grouped workflow creates individual trees for each taxonomic group. Optionally, you can also create a combined tree from all groups by specifying `--combined-tree-label-rank`. The combined tree includes representatives from all taxonomic groups and can be very time-consuming to build with large datasets, so it is only built when explicitly requested.
 
 ### eplace relabel
 

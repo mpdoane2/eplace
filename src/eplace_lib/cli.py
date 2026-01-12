@@ -709,8 +709,8 @@ def grouped_command(args):
     except Exception as e:
         logger.error(f"Error generating classification summary: {e}")
 
-    # Step 9: Build combined tree from all groups
-    if not args.skip_alignment and group_results:
+    # Step 9: Build combined tree from all groups (optional)
+    if not args.skip_alignment and group_results and args.combined_tree_label_rank is not None:
         logger.info("\n[Step 9/9] Building combined tree from all groups...")
         try:
             combined_results = concatenate_all_groups_and_build_tree(
@@ -730,6 +730,9 @@ def grouped_command(args):
                 logger.info(f"✓ Combined labeled tree: {combined_results['labeled_tree']}")
         except Exception as e:
             logger.error(f"Error building combined tree: {e}")
+    elif not args.skip_alignment and group_results and args.combined_tree_label_rank is None:
+        logger.info("\n[Step 9/9] Skipping combined tree building (not requested)")
+        logger.info("To build a combined tree from all groups, use --combined-tree-label-rank option")
 
     logger.info("\n" + "=" * 60)
     logger.info("Grouped workflow completed successfully!")
@@ -966,9 +969,9 @@ Notes:
     grouped_parser.add_argument(
         '--combined-tree-label-rank',
         type=str,
-        default='genus',
+        default=None,
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
-        help='Taxonomic rank for tree labeling for the combined tree (default: genus)'
+        help='Taxonomic rank for tree labeling for the combined tree. If not provided, the combined tree will not be built (to save time with large datasets).'
     )
     grouped_parser.add_argument(
         '--min-identity',
