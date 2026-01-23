@@ -973,6 +973,15 @@ class TestGenerateClassificationSummary:
             'family': ('543', 'Enterobacteriaceae'),
             'genus': ('590', 'Salmonella')
         }
+        self.ecoli_taxonomy = {
+            'domain': ('2', 'Bacteria'),
+            'phylum': ('1224', 'Pseudomonadota'),
+            'class': ('1236', 'Gammaproteobacteria'),
+            'order': ('91347', 'Enterobacterales'),
+            'family': ('543', 'Enterobacteriaceae'),
+            'genus': ('561', 'Escherichia'),
+            'species': ('562', 'Escherichia coli')
+        }
         # in this test taxonomy we deliberartely delete order to confirm that 
         # the missing taxonomies are handeled correctly
         self.human_taxonomy = {
@@ -998,10 +1007,15 @@ class TestGenerateClassificationSummary:
         return {
             'query_id': header.index('query_id'),
             'blast_hits': header.index('blast_hits'),
-            'taxonomy': header.index('taxonomy'),
-            'classification_name': header.index('classification_name'),
-            'group_name': header.index('group_name'),
-            'tree_label_name': header.index('tree_label_name'),
+            'taxonomy_blast': header.index('taxonomy_blast'),
+            'blast_classification_name': header.index('blast_classification_name'),
+            'blast_group_name': header.index('blast_group_name'),
+            'blast_tree_label_name': header.index('blast_tree_label_name'),
+            'tree_based_classification': header.index('tree_based_classification'),
+            'taxonomy_tree': header.index('taxonomy_tree'),
+            'tree_classification_name': header.index('tree_classification_name'),
+            'tree_group_name': header.index('tree_group_name'),
+            'tree_tree_label_name': header.index('tree_tree_label_name'),
             'appears_in_multiple_groups': header.index('appears_in_multiple_groups'),
             'has_classification': header.index('has_classification')
         }
@@ -1074,41 +1088,46 @@ class TestGenerateClassificationSummary:
             header = lines[0].strip().split('\t')
             assert 'query_id' in header
             assert 'blast_hits' in header
-            assert 'classification_name' in header
-            assert 'group_name' in header
-            assert 'tree_label_name' in header
+            assert 'blast_classification_name' in header
+            assert 'blast_group_name' in header
+            assert 'blast_tree_label_name' in header
+            assert 'tree_based_classification' in header
+            assert 'tree_classification_name' in header
             assert 'appears_in_multiple_groups' in header
             assert 'has_classification' in header
             
             # Get column indices using helper method
             col_idx = self._get_column_indices(header)
 
-            # Check seq1 data
+            # Check seq1 data (BLAST-based, no tree)
             data1 = lines[1].strip().split('\t')
             assert data1[col_idx['query_id']] == 'seq1'
-            assert 'Salmonella' in data1[col_idx['classification_name']]
-            assert 'Gammaproteobacteria' in data1[col_idx['group_name']]
-            assert 'Enterobacteriaceae' in data1[col_idx['tree_label_name']]
-            assert data1[col_idx['taxonomy']] == 'Bacteria;Pseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella;'
+            assert 'Salmonella' in data1[col_idx['blast_classification_name']]
+            assert 'Gammaproteobacteria' in data1[col_idx['blast_group_name']]
+            assert 'Enterobacteriaceae' in data1[col_idx['blast_tree_label_name']]
+            assert data1[col_idx['taxonomy_blast']] == 'Bacteria;Pseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Salmonella;'
+            assert data1[col_idx['tree_based_classification']] == 'No'
             assert data1[col_idx['appears_in_multiple_groups']] == 'No'
             assert data1[col_idx['has_classification']] == 'Yes'
             
-            # Check seq2 data
+            # Check seq2 data (BLAST-based, no tree)
             data2 = lines[2].strip().split('\t')
             assert data2[col_idx['query_id']] == 'seq2'
-            assert 'Homo' in data2[col_idx['classification_name']]
-            assert 'Mammalia' in data2[col_idx['group_name']]
-            assert 'Hominidae' in data2[col_idx['tree_label_name']]
-            assert data2[col_idx['taxonomy']] == 'Eukaryota;Chordata;Mammalia;;Hominidae;Homo;Homo sapiens'
+            assert 'Homo' in data2[col_idx['blast_classification_name']]
+            assert 'Mammalia' in data2[col_idx['blast_group_name']]
+            assert 'Hominidae' in data2[col_idx['blast_tree_label_name']]
+            assert data2[col_idx['taxonomy_blast']] == 'Eukaryota;Chordata;Mammalia;;Hominidae;Homo;Homo sapiens'
+            assert data2[col_idx['tree_based_classification']] == 'No'
             assert data2[col_idx['appears_in_multiple_groups']] == 'No'
             assert data2[col_idx['has_classification']] == 'Yes'
 
             data3 = lines[3].strip().split('\t')
             assert data3[col_idx['query_id']] == 'seq3'
-            assert 'N/A' in data3[col_idx['classification_name']]
-            assert 'N/A' in data3[col_idx['group_name']]
-            assert 'N/A' in data3[col_idx['tree_label_name']]
-            assert data3[col_idx['taxonomy']] == ';;;;;'
+            assert 'N/A' in data3[col_idx['blast_classification_name']]
+            assert 'N/A' in data3[col_idx['blast_group_name']]
+            assert 'N/A' in data3[col_idx['blast_tree_label_name']]
+            assert data3[col_idx['taxonomy_blast']] == ';;;;;'
+            assert data3[col_idx['tree_based_classification']] == 'No'
             assert data3[col_idx['appears_in_multiple_groups']] == 'No'
             assert data3[col_idx['has_classification']] == 'No'
 
@@ -1231,4 +1250,154 @@ class TestGenerateClassificationSummary:
             )
             
             assert result is False
+    
+    def test_generate_classification_summary_with_tree(self):
+        """Test classification using tree-based nearest neighbor alongside BLAST."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            # Create mock BLAST hits
+            # subject1 has higher bit score (900) but subject2 is closer in tree
+            hits = [
+                BlastHit(
+                    query_id='seq1', subject_id='subject1',
+                    percent_identity=98.0, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=540,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=900,
+                    query_coverage=100,
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
+                ),
+                BlastHit(
+                    query_id='seq1', subject_id='subject2',
+                    percent_identity=95.0, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=540,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=1e-100,
+                    bit_score=800,
+                    query_coverage=100,
+                    subject_taxid="562",
+                    subject_taxids="562",
+                    subject_taxonomy=self.ecoli_taxonomy
+                )
+            ]
+            
+            seqs = {'seq1': 'this has a hit'}
+            
+            # Create a tree where subject2 is phylogenetically closer to seq1
+            # Tree: (seq1:0.1,(subject2:0.05,subject1:0.5):0.05);
+            tree_file = tmppath / "seq1.treefile"
+            tree_content = "(seq1:0.1,(subject2:0.05,subject1:0.5):0.05);"
+            tree_file.write_text(tree_content)
+            
+            # Generate classification with tree info
+            result = generate_classification_summary(
+                sequences=seqs,
+                blast_hits=hits,
+                output_file=output_file,
+                rank='species',
+                group_rank='genus',
+                tree_label_rank='genus',
+                tree_files={'seq1': tree_file}
+            )
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Read and verify content
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            # Should have header + 1 data line
+            assert len(lines) == 2
+            
+            # Check that we have both BLAST and tree-based classifications
+            header = lines[0].strip().split('\t')
+            col_idx = self._get_column_indices(header)
+            data = lines[1].strip().split('\t')
+            
+            # BLAST-based classification should be Salmonella (subject1 - best bit score)
+            assert 'Salmonella' in data[col_idx['blast_classification_name']]
+            assert 'Salmonella' in data[col_idx['blast_group_name']]
+            
+            # Tree-based classification should be E. coli (subject2 - phylogenetically closest)
+            assert data[col_idx['tree_based_classification']] == 'Yes'
+            assert 'Escherichia coli' in data[col_idx['tree_classification_name']]
+            assert 'Escherichia' in data[col_idx['tree_group_name']]
+    
+    def test_generate_classification_summary_with_missing_tree(self):
+        """Test classification falls back gracefully when tree is not available."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            output_file = tmppath / "classification.tsv"
+            
+            hits = [
+                BlastHit(
+                    query_id='seq1', subject_id='subject1',
+                    percent_identity=100.0, 
+                    alignment_length=540,
+                    query_length=540,
+                    subject_length=540,
+                    query_start=1, 
+                    query_end=540,
+                    subject_start=1,
+                    subject_end=540,
+                    evalue=0.0,
+                    bit_score=998,
+                    query_coverage=100,
+                    subject_taxid="590",
+                    subject_taxids="590",
+                    subject_taxonomy=self.salmonella_taxonomy
+                )
+            ]
+            
+            seqs = {'seq1': 'this has a hit'}
+            
+            # Pass tree_files but with non-existent file
+            non_existent_tree = tmppath / "nonexistent.treefile"
+            
+            result = generate_classification_summary(
+                sequences=seqs,
+                blast_hits=hits,
+                output_file=output_file,
+                rank='genus',
+                group_rank='class',
+                tree_label_rank='genus',
+                tree_files={'seq1': non_existent_tree}
+            )
+            
+            assert result is True
+            assert output_file.exists()
+            
+            # Should have BLAST-based classification, but no tree-based
+            with open(output_file, 'r') as f:
+                lines = f.readlines()
+            
+            header = lines[0].strip().split('\t')
+            col_idx = self._get_column_indices(header)
+            data = lines[1].strip().split('\t')
+            
+            # BLAST-based classification should have Salmonella
+            assert 'Salmonella' in data[col_idx['blast_classification_name']]
+            assert 'Gammaproteobacteria' in data[col_idx['blast_group_name']]
+            
+            # Tree-based classification should be unavailable
+            assert data[col_idx['tree_based_classification']] == 'No'
+            assert data[col_idx['tree_classification_name']] == 'N/A'
+            assert data[col_idx['tree_group_name']] == 'N/A'
+
 

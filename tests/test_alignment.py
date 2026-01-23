@@ -831,3 +831,156 @@ query1\t5\tPseudomonadota;Gammaproteobacteria;Enterobacterales;Enterobacteriacea
                     # Count number of sequences (lines starting with '>')
                     num_seqs = content.count('>')
                     assert num_seqs == 2  # query1 + ref1
+
+
+class TestNewickTreeParsing:
+    """Test cases for Newick tree parsing and nearest neighbor finding."""
+    
+    def test_parse_simple_newick_basic(self):
+        """Test parsing a simple Newick tree."""
+        from eplace_lib.alignment import parse_simple_newick
+        
+        # Simple tree: (A:0.1,B:0.2,C:0.3);
+        newick_str = "(A:0.1,B:0.2,C:0.3);"
+        root = parse_simple_newick(newick_str)
+        
+        assert root is not None
+        assert len(root.children) == 3
+        assert root.children[0].name == "A"
+        assert root.children[0].distance == 0.1
+        assert root.children[1].name == "B"
+        assert root.children[1].distance == 0.2
+        assert root.children[2].name == "C"
+        assert root.children[2].distance == 0.3
+    
+    def test_parse_simple_newick_nested(self):
+        """Test parsing a nested Newick tree."""
+        from eplace_lib.alignment import parse_simple_newick
+        
+        # Nested tree: ((A:0.1,B:0.2):0.3,C:0.4);
+        newick_str = "((A:0.1,B:0.2):0.3,C:0.4);"
+        root = parse_simple_newick(newick_str)
+        
+        assert root is not None
+        assert len(root.children) == 2
+        
+        # First child should be an internal node with distance 0.3
+        internal = root.children[0]
+        assert internal.distance == 0.3
+        assert len(internal.children) == 2
+        assert internal.children[0].name == "A"
+        assert internal.children[0].distance == 0.1
+        assert internal.children[1].name == "B"
+        assert internal.children[1].distance == 0.2
+        
+        # Second child should be leaf C
+        assert root.children[1].name == "C"
+        assert root.children[1].distance == 0.4
+    
+    def test_parse_simple_newick_with_labels(self):
+        """Test parsing a Newick tree with internal node labels."""
+        from eplace_lib.alignment import parse_simple_newick
+        
+        # Tree with internal label: ((A:0.1,B:0.2)AB:0.3,C:0.4);
+        newick_str = "((A:0.1,B:0.2)AB:0.3,C:0.4);"
+        root = parse_simple_newick(newick_str)
+        
+        assert root is not None
+        internal = root.children[0]
+        assert internal.name == "AB"
+        assert internal.distance == 0.3
+    
+    def test_find_nearest_neighbor_simple(self):
+        """Test finding nearest neighbor in a simple tree."""
+        from eplace_lib.alignment import find_nearest_neighbor_in_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create a test tree where query1 is closest to subject1
+            # Tree: (query1:0.1,(subject1:0.05,subject2:0.5):0.05);
+            tree_file = tmppath / "test.treefile"
+            tree_content = "(query1:0.1,(subject1:0.05,subject2:0.5):0.05);"
+            tree_file.write_text(tree_content)
+            
+            # Find nearest neighbor
+            nearest = find_nearest_neighbor_in_tree(tree_file, "query1")
+            
+            # subject1 should be closest (distance = 0.1 + 0.05 + 0.05 = 0.2)
+            # subject2 would be (distance = 0.1 + 0.05 + 0.5 = 0.65)
+            assert nearest == "subject1"
+    
+    def test_find_nearest_neighbor_complex(self):
+        """Test finding nearest neighbor in a more complex tree."""
+        from eplace_lib.alignment import find_nearest_neighbor_in_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Create a more complex tree
+            # Tree: ((query1:0.1,subject1:0.1):0.2,(subject2:0.15,subject3:0.25):0.2);
+            tree_file = tmppath / "test.treefile"
+            tree_content = "((query1:0.1,subject1:0.1):0.2,(subject2:0.15,subject3:0.25):0.2);"
+            tree_file.write_text(tree_content)
+            
+            # Find nearest neighbor
+            nearest = find_nearest_neighbor_in_tree(tree_file, "query1")
+            
+            # subject1 should be closest (distance = 0.1 + 0.1 = 0.2)
+            # subject2 would be (distance = 0.1 + 0.2 + 0.2 + 0.15 = 0.65)
+            # subject3 would be (distance = 0.1 + 0.2 + 0.2 + 0.25 = 0.75)
+            assert nearest == "subject1"
+    
+    def test_find_nearest_neighbor_with_reversed_sequence(self):
+        """Test finding nearest neighbor when sequence was reversed by MAFFT."""
+        from eplace_lib.alignment import find_nearest_neighbor_in_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Tree with _R_ prefix (reversed by MAFFT)
+            tree_file = tmppath / "test.treefile"
+            tree_content = "(query1:0.1,_R_subject1:0.15,subject2:0.5);"
+            tree_file.write_text(tree_content)
+            
+            # Find nearest neighbor
+            nearest = find_nearest_neighbor_in_tree(tree_file, "query1")
+            
+            # _R_subject1 should be closest
+            assert nearest == "_R_subject1"
+    
+    def test_find_nearest_neighbor_query_not_in_tree(self):
+        """Test handling when query is not found in tree."""
+        from eplace_lib.alignment import find_nearest_neighbor_in_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            tree_file = tmppath / "test.treefile"
+            tree_content = "(subject1:0.1,subject2:0.2);"
+            tree_file.write_text(tree_content)
+            
+            # Find nearest neighbor for non-existent query
+            nearest = find_nearest_neighbor_in_tree(tree_file, "query_not_here")
+            
+            # Should return None
+            assert nearest is None
+    
+    def test_find_nearest_neighbor_empty_tree(self):
+        """Test handling empty or invalid tree file."""
+        from eplace_lib.alignment import find_nearest_neighbor_in_tree
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            # Empty tree file
+            tree_file = tmppath / "test.treefile"
+            tree_file.write_text("")
+            
+            nearest = find_nearest_neighbor_in_tree(tree_file, "query1")
+            assert nearest is None
+            
+            # Non-existent tree file
+            tree_file2 = tmppath / "nonexistent.treefile"
+            nearest2 = find_nearest_neighbor_in_tree(tree_file2, "query1")
+            assert nearest2 is None

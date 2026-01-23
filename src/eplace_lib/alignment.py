@@ -1639,8 +1639,7 @@ def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
         
         # Stack to track parent nodes
         stack = []
-        current_node = SimpleNewickNode()
-        stack.append(current_node)
+        current_node = None
         
         i = 0
         token = ""
@@ -1651,8 +1650,12 @@ def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
             if char == '(':
                 # Start a new internal node
                 new_node = SimpleNewickNode()
-                current_node.children.append(new_node)
-                new_node.parent = current_node
+                
+                if current_node is not None:
+                    # Add as child to current node
+                    current_node.children.append(new_node)
+                    new_node.parent = current_node
+                
                 stack.append(new_node)
                 current_node = new_node
                 token = ""
@@ -1675,11 +1678,6 @@ def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
                     current_node.children.append(leaf)
                     token = ""
                 
-                # Move up to parent
-                if len(stack) > 1:
-                    stack.pop()
-                    current_node = stack[-1]
-                
                 # Look for node label and distance after ')'
                 i += 1
                 label_token = ""
@@ -1693,6 +1691,11 @@ def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
                         current_node.name = name
                     current_node.distance = distance
                 
+                # Move up to parent
+                if len(stack) > 1:
+                    stack.pop()
+                    current_node = stack[-1]
+                
                 i -= 1  # Adjust because we'll increment at the end
                 
             else:
@@ -1702,7 +1705,7 @@ def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
             i += 1
         
         # Process any final token
-        if token:
+        if token and current_node:
             name, distance = _parse_node_info(token)
             if name:
                 current_node.name = name

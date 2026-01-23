@@ -527,16 +527,27 @@ def generate_classification_summary(
         classification = {
             'query_id': query_id,
             'blast_hits': 0,
-            'taxonomy': ';;;;;',
-            'classification_rank': rank,
-            'classification_taxid': 'N/A',
-            'classification_name': 'N/A',
-            'group_rank': group_rank,
-            'group_taxid': 'N/A',
-            'group_name': 'N/A',
-            'tree_label_rank': tree_label_rank,
-            'tree_label_taxid': 'N/A',
-            'tree_label_name': 'N/A',
+            'taxonomy_blast': ';;;;;',
+            'blast_classification_rank': rank,
+            'blast_classification_taxid': 'N/A',
+            'blast_classification_name': 'N/A',
+            'blast_group_rank': group_rank,
+            'blast_group_taxid': 'N/A',
+            'blast_group_name': 'N/A',
+            'blast_tree_label_rank': tree_label_rank,
+            'blast_tree_label_taxid': 'N/A',
+            'blast_tree_label_name': 'N/A',
+            'taxonomy_tree': ';;;;;',
+            'tree_classification_rank': rank,
+            'tree_classification_taxid': 'N/A',
+            'tree_classification_name': 'N/A',
+            'tree_group_rank': group_rank,
+            'tree_group_taxid': 'N/A',
+            'tree_group_name': 'N/A',
+            'tree_tree_label_rank': tree_label_rank,
+            'tree_tree_label_taxid': 'N/A',
+            'tree_tree_label_name': 'N/A',
+            'tree_based_classification': 'No',
             'appears_in_multiple_groups': 'No',
             'has_classification': 'Yes'
         }
@@ -549,10 +560,40 @@ def generate_classification_summary(
 
         classification['blast_hits'] = len(query_hits)
 
-        # Determine which hit to use for classification
-        # Priority: 1) Nearest neighbor from tree (if available)
-        #          2) Best BLAST hit by bit score (fallback)
-        best_hit = None
+        # Get the best BLAST hit (highest bit score) for BLAST-based classification
+        blast_best_hit = max(query_hits, key=lambda h: h.bit_score)
+        
+        # Populate BLAST-based classification
+        if blast_best_hit.subject_taxonomy:
+            classification['taxonomy_blast'] = ';'.join([blast_best_hit.subject_taxonomy[r][1] if r in blast_best_hit.subject_taxonomy else ""
+                                                   for r in VALID_RANKS])
+        
+        # Extract BLAST-based classification at different ranks
+        blast_missing_ranks = []
+        
+        if blast_best_hit.subject_taxonomy and rank in blast_best_hit.subject_taxonomy:
+            taxid, name = blast_best_hit.subject_taxonomy[rank]
+            classification['blast_classification_taxid'] = taxid
+            classification['blast_classification_name'] = name
+        else:
+            blast_missing_ranks.append(rank)
+        
+        if blast_best_hit.subject_taxonomy and group_rank in blast_best_hit.subject_taxonomy:
+            taxid, name = blast_best_hit.subject_taxonomy[group_rank]
+            classification['blast_group_taxid'] = taxid
+            classification['blast_group_name'] = name
+        else:
+            blast_missing_ranks.append(group_rank)
+        
+        if blast_best_hit.subject_taxonomy and tree_label_rank in blast_best_hit.subject_taxonomy:
+            taxid, name = blast_best_hit.subject_taxonomy[tree_label_rank]
+            classification['blast_tree_label_taxid'] = taxid
+            classification['blast_tree_label_name'] = name
+        else:
+            blast_missing_ranks.append(tree_label_rank)
+        
+        # Try to get tree-based classification
+        tree_best_hit = None
         
         if tree_files and query_id in tree_files:
             # Try to find the nearest neighbor in the phylogenetic tree
@@ -570,56 +611,43 @@ def generate_classification_summary(
                     for hit in query_hits:
                         # Check direct match or match with _R_ prefix
                         if hit.subject_id == nearest_neighbor or hit.subject_id == nearest_neighbor.replace('_R_', ''):
-                            best_hit = hit
-                            logger.info(f"Using tree-based nearest neighbor for {query_id}: {nearest_neighbor}")
+                            tree_best_hit = hit
+                            classification['tree_based_classification'] = 'Yes'
+                            logger.info(f"Tree-based nearest neighbor for {query_id}: {nearest_neighbor}")
                             break
         
-        # Fallback to best BLAST hit if tree-based approach didn't work
-        if best_hit is None:
-            best_hit = max(query_hits, key=lambda h: h.bit_score)
-            logger.debug(f"Using best BLAST hit for {query_id}: {best_hit.subject_id}")
+        # Populate tree-based classification if available
+        if tree_best_hit:
+            if tree_best_hit.subject_taxonomy:
+                classification['taxonomy_tree'] = ';'.join([tree_best_hit.subject_taxonomy[r][1] if r in tree_best_hit.subject_taxonomy else ""
+                                                       for r in VALID_RANKS])
+            
+            tree_missing_ranks = []
+            
+            if tree_best_hit.subject_taxonomy and rank in tree_best_hit.subject_taxonomy:
+                taxid, name = tree_best_hit.subject_taxonomy[rank]
+                classification['tree_classification_taxid'] = taxid
+                classification['tree_classification_name'] = name
+            else:
+                tree_missing_ranks.append(rank)
+            
+            if tree_best_hit.subject_taxonomy and group_rank in tree_best_hit.subject_taxonomy:
+                taxid, name = tree_best_hit.subject_taxonomy[group_rank]
+                classification['tree_group_taxid'] = taxid
+                classification['tree_group_name'] = name
+            else:
+                tree_missing_ranks.append(group_rank)
+            
+            if tree_best_hit.subject_taxonomy and tree_label_rank in tree_best_hit.subject_taxonomy:
+                taxid, name = tree_best_hit.subject_taxonomy[tree_label_rank]
+                classification['tree_tree_label_taxid'] = taxid
+                classification['tree_tree_label_name'] = name
+            else:
+                tree_missing_ranks.append(tree_label_rank)
         
-        if best_hit.subject_taxonomy:
-            classification['taxonomy'] = ';'.join([best_hit.subject_taxonomy[rank][1] if rank in best_hit.subject_taxonomy else ""
-                                                   for rank in VALID_RANKS])
-
-        # Track which ranks have valid taxonomy information
-        # We check three ranks: rank, group_rank, and tree_label_rank
-        ranks_to_check = [
-            (rank, 'classification'),
-            (group_rank, 'group'),
-            (tree_label_rank, 'tree_label')
-        ]
-        missing_ranks = []
-        
-        # Extract closest organism at classification rank
-        if best_hit.subject_taxonomy and rank in best_hit.subject_taxonomy:
-            taxid, name = best_hit.subject_taxonomy[rank]
-            classification['classification_taxid'] = taxid
-            classification['classification_name'] = name
-        else:
-            missing_ranks.append(rank)
-        
-        # Extract closest organism at group rank
-        if best_hit.subject_taxonomy and group_rank in best_hit.subject_taxonomy:
-            taxid, name = best_hit.subject_taxonomy[group_rank]
-            classification['group_taxid'] = taxid
-            classification['group_name'] = name
-        else:
-            missing_ranks.append(group_rank)
-        
-        # Extract closest organism at tree label rank
-        if best_hit.subject_taxonomy and tree_label_rank in best_hit.subject_taxonomy:
-            taxid, name = best_hit.subject_taxonomy[tree_label_rank]
-            classification['tree_label_taxid'] = taxid
-            classification['tree_label_name'] = name
-        else:
-            missing_ranks.append(tree_label_rank)
-        
-        # Set classification status based on missing ranks
-        total_ranks = len(ranks_to_check)
-        if missing_ranks:
-            if len(missing_ranks) == total_ranks:
+        # Set classification status based on BLAST missing ranks
+        if blast_missing_ranks:
+            if len(blast_missing_ranks) == 3:  # All three ranks missing
                 classification['has_classification'] = 'No'
             else:
                 classification['has_classification'] = 'Partial'
@@ -635,28 +663,40 @@ def generate_classification_summary(
 
         if len(group_names) > 1:
             classification['appears_in_multiple_groups'] = 'Yes'
-            classification['group_name'] = '; '.join(sorted(group_names))
-            classification['group_taxid'] = '; '.join(sorted(group_taxids))
+            # Update BLAST group names/taxids to show all groups
+            classification['blast_group_name'] = '; '.join(sorted(group_names))
+            classification['blast_group_taxid'] = '; '.join(sorted(group_taxids))
         
         summary_data.append(classification)
     
     # Write TSV file
     try:
         with open(output_file, 'w') as f:
-            # Write header
+            # Write header with both BLAST and tree-based columns
             headers = [
                 'query_id',
                 'blast_hits',
-                'taxonomy',
-                'classification_rank',
-                'classification_taxid',
-                'classification_name',
-                'group_rank',
-                'group_taxid',
-                'group_name',
-                'tree_label_rank',
-                'tree_label_taxid',
-                'tree_label_name',
+                'taxonomy_blast',
+                'blast_classification_rank',
+                'blast_classification_taxid',
+                'blast_classification_name',
+                'blast_group_rank',
+                'blast_group_taxid',
+                'blast_group_name',
+                'blast_tree_label_rank',
+                'blast_tree_label_taxid',
+                'blast_tree_label_name',
+                'tree_based_classification',
+                'taxonomy_tree',
+                'tree_classification_rank',
+                'tree_classification_taxid',
+                'tree_classification_name',
+                'tree_group_rank',
+                'tree_group_taxid',
+                'tree_group_name',
+                'tree_tree_label_rank',
+                'tree_tree_label_taxid',
+                'tree_tree_label_name',
                 'appears_in_multiple_groups',
                 'has_classification'
             ]
@@ -667,16 +707,27 @@ def generate_classification_summary(
                 row = [
                     entry['query_id'],
                     str(entry['blast_hits']),
-                    entry['taxonomy'],
-                    entry['classification_rank'],
-                    entry['classification_taxid'],
-                    entry['classification_name'],
-                    entry['group_rank'],
-                    entry['group_taxid'],
-                    entry['group_name'],
-                    entry['tree_label_rank'],
-                    entry['tree_label_taxid'],
-                    entry['tree_label_name'],
+                    entry['taxonomy_blast'],
+                    entry['blast_classification_rank'],
+                    entry['blast_classification_taxid'],
+                    entry['blast_classification_name'],
+                    entry['blast_group_rank'],
+                    entry['blast_group_taxid'],
+                    entry['blast_group_name'],
+                    entry['blast_tree_label_rank'],
+                    entry['blast_tree_label_taxid'],
+                    entry['blast_tree_label_name'],
+                    entry['tree_based_classification'],
+                    entry['taxonomy_tree'],
+                    entry['tree_classification_rank'],
+                    entry['tree_classification_taxid'],
+                    entry['tree_classification_name'],
+                    entry['tree_group_rank'],
+                    entry['tree_group_taxid'],
+                    entry['tree_group_name'],
+                    entry['tree_tree_label_rank'],
+                    entry['tree_tree_label_taxid'],
+                    entry['tree_tree_label_name'],
                     entry['appears_in_multiple_groups'],
                     entry['has_classification']
                 ]
