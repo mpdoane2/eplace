@@ -1849,14 +1849,14 @@ def _calculate_tree_distance(node1: SimpleNewickNode, node2: SimpleNewickNode) -
     path2 = _get_path_to_root(node2)
     
     # Find the most recent common ancestor (MRCA)
-    # The paths are from node to root, so reverse them
-    path1.reverse()
-    path2.reverse()
+    # The paths are from node to root, so reverse them (without modifying originals)
+    path1_reversed = path1[::-1]
+    path2_reversed = path2[::-1]
     
     # Find where paths diverge
     mrca_index = 0
-    for i in range(min(len(path1), len(path2))):
-        if path1[i] is path2[i]:
+    for i in range(min(len(path1_reversed), len(path2_reversed))):
+        if path1_reversed[i] is path2_reversed[i]:
             mrca_index = i
         else:
             break
@@ -1864,12 +1864,12 @@ def _calculate_tree_distance(node1: SimpleNewickNode, node2: SimpleNewickNode) -
     # Calculate distance: sum from node1 to MRCA + sum from MRCA to node2
     distance = 0.0
     
-    # Distance from node1 to MRCA
-    for i in range(mrca_index, len(path1)):
+    # Distance from node1 to MRCA (excluding MRCA itself to avoid double counting)
+    for i in range(len(path1) - mrca_index - 1):
         distance += path1[i].distance
     
-    # Distance from node2 to MRCA
-    for i in range(mrca_index + 1, len(path2)):
+    # Distance from node2 to MRCA (excluding MRCA itself)
+    for i in range(len(path2) - mrca_index - 1):
         distance += path2[i].distance
     
     return distance

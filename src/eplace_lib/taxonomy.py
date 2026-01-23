@@ -613,8 +613,12 @@ def generate_classification_summary(
                         if hit.subject_id == nearest_neighbor or hit.subject_id == nearest_neighbor.replace('_R_', ''):
                             tree_best_hit = hit
                             classification['tree_based_classification'] = 'Yes'
-                            logger.info(f"Tree-based nearest neighbor for {query_id}: {nearest_neighbor}")
                             break
+                    
+                    if tree_best_hit:
+                        logger.info(f"Tree-based nearest neighbor for {query_id}: {nearest_neighbor}")
+                    else:
+                        logger.debug(f"Tree nearest neighbor {nearest_neighbor} not found in BLAST hits for {query_id}")
         
         # Populate tree-based classification if available
         if tree_best_hit:
