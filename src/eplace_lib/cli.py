@@ -268,6 +268,17 @@ def blast_command(args):
 
     # Step 6: Generate classification summary TSV
     logger.info("\nGenerating classification summary TSV file...")
+    
+    # Collect tree file paths for each query (if trees were built)
+    tree_files_map = {}
+    if not args.skip_alignment and 'query_job_info' in locals():
+        for tree_path, job_info in query_job_info.items():
+            query_id = job_info['query_id']
+            tree_file = job_info['tree_file']
+            # Use the tree file (unlabeled version) as it has the original subject IDs
+            if tree_file and tree_file.exists():
+                tree_files_map[query_id] = tree_file
+    
     try:
         success = generate_classification_summary(
             sequences=sequences,
@@ -275,7 +286,8 @@ def blast_command(args):
             output_file=args.output_classification,
             rank=args.rank,
             group_rank=args.rank,  # For individual workflow, group_rank same as rank
-            tree_label_rank=args.tree_label_rank
+            tree_label_rank=args.tree_label_rank,
+            tree_files=tree_files_map if tree_files_map else None
         )
         
         if success:
@@ -643,6 +655,7 @@ def grouped_command(args):
                 if result['tree_job']:
                     tree_jobs.append(result['tree_job'])
                     group_job_info[str(result['tree_file'])] = {
+                        'group_tid': group_tid,
                         'group_name': group_name,
                         'tree_file': result['tree_file'],
                         'labeled_tree_path': result['labeled_tree_path'],
@@ -692,6 +705,23 @@ def grouped_command(args):
 
     # Step 8: Generate classification summary TSV
     logger.info("\n[Step 8/9] Generating classification summary TSV file...")
+    
+    # Collect tree file paths for each query (if trees were built)
+    # In grouped workflow, multiple queries may share the same group tree
+    tree_files_map = {}
+    if not args.skip_alignment and 'group_job_info' in locals() and 'group_results' in locals():
+        for tree_path, job_info in group_job_info.items():
+            group_tid = job_info.get('group_tid')
+            tree_file = job_info['tree_file']
+            
+            # Find which queries belong to this group
+            if group_tid in group_results:
+                query_ids = group_results[group_tid]['query_ids']
+                # Map each query to this tree file
+                if tree_file and tree_file.exists():
+                    for query_id in query_ids:
+                        tree_files_map[query_id] = tree_file
+    
     try:
         success = generate_classification_summary(
             sequences=sequences,
@@ -699,7 +729,8 @@ def grouped_command(args):
             output_file=args.output_classification,
             rank=args.rank,
             group_rank=args.group_rank,
-            tree_label_rank=args.tree_label_rank
+            tree_label_rank=args.tree_label_rank,
+            tree_files=tree_files_map if tree_files_map else None
         )
         
         if success:

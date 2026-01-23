@@ -472,7 +472,8 @@ def generate_classification_summary(
     output_file: Path,
     rank: str = "genus",
     group_rank: str = "class",
-    tree_label_rank: str = "genus"
+    tree_label_rank: str = "genus",
+    tree_files: Optional[dict[str, Path]] = None
 ) -> bool:
     """
     Generate a classification summary TSV file for each query sequence.
@@ -485,6 +486,9 @@ def generate_classification_summary(
     - Whether the sequence appears in multiple groups
     - Whether the sequence has no appropriate classification
     
+    The classification is based on the phylogenetically nearest neighbor in the tree
+    (if available), otherwise falls back to the best BLAST hit by bit score.
+    
     Args:
         sequences: dictionary of sequences that we read from the fasta file
         blast_hits: List of BlastHit objects with taxonomy information
@@ -492,6 +496,7 @@ def generate_classification_summary(
         rank: Taxonomic rank for classification (default: genus)
         group_rank: Taxonomic rank for grouping (default: class)
         tree_label_rank: Taxonomic rank for tree labeling (default: genus)
+        tree_files: Optional dict mapping query_id to tree file paths for finding nearest neighbors
         
     Returns:
         True if successful, False otherwise
@@ -544,8 +549,36 @@ def generate_classification_summary(
 
         classification['blast_hits'] = len(query_hits)
 
-        # Find the best hit (highest bit score) to extract taxonomy information at all ranks
-        best_hit = max(query_hits, key=lambda h: h.bit_score)
+        # Determine which hit to use for classification
+        # Priority: 1) Nearest neighbor from tree (if available)
+        #          2) Best BLAST hit by bit score (fallback)
+        best_hit = None
+        
+        if tree_files and query_id in tree_files:
+            # Try to find the nearest neighbor in the phylogenetic tree
+            tree_file = tree_files[query_id]
+            if tree_file and tree_file.exists():
+                # Import here to avoid circular dependency
+                from .alignment import find_nearest_neighbor_in_tree
+                
+                nearest_neighbor = find_nearest_neighbor_in_tree(tree_file, query_id)
+                
+                if nearest_neighbor:
+                    # Find the BLAST hit corresponding to the nearest neighbor
+                    # The nearest neighbor name might have the _R_ prefix (from MAFFT reverse complement)
+                    # or might be a sanitized version of the subject_id
+                    for hit in query_hits:
+                        # Check direct match or match with _R_ prefix
+                        if hit.subject_id == nearest_neighbor or hit.subject_id == nearest_neighbor.replace('_R_', ''):
+                            best_hit = hit
+                            logger.info(f"Using tree-based nearest neighbor for {query_id}: {nearest_neighbor}")
+                            break
+        
+        # Fallback to best BLAST hit if tree-based approach didn't work
+        if best_hit is None:
+            best_hit = max(query_hits, key=lambda h: h.bit_score)
+            logger.debug(f"Using best BLAST hit for {query_id}: {best_hit.subject_id}")
+        
         if best_hit.subject_taxonomy:
             classification['taxonomy'] = ';'.join([best_hit.subject_taxonomy[rank][1] if rank in best_hit.subject_taxonomy else ""
                                                    for rank in VALID_RANKS])

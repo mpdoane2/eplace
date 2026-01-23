@@ -1594,3 +1594,297 @@ def concatenate_all_groups_and_build_tree(
         return results
     
     return results
+
+
+class SimpleNewickNode:
+    """
+    Simple Newick tree node representation for finding nearest neighbors.
+    """
+    def __init__(self, name: str = "", distance: float = 0.0):
+        self.name = name
+        self.distance = distance
+        self.children: List['SimpleNewickNode'] = []
+        self.parent: Optional['SimpleNewickNode'] = None
+    
+    def is_leaf(self) -> bool:
+        """Check if this node is a leaf."""
+        return len(self.children) == 0
+    
+    def get_leaves(self) -> List['SimpleNewickNode']:
+        """Get all leaf nodes under this node."""
+        if self.is_leaf():
+            return [self]
+        leaves = []
+        for child in self.children:
+            leaves.extend(child.get_leaves())
+        return leaves
+
+
+def parse_simple_newick(newick_str: str) -> Optional[SimpleNewickNode]:
+    """
+    Parse a simple Newick tree string into a tree structure.
+    
+    This is a lightweight parser that handles basic Newick format with branch lengths.
+    Format: ((A:0.1,B:0.2):0.3,C:0.4);
+    
+    Args:
+        newick_str: Newick format tree string
+        
+    Returns:
+        Root node of the parsed tree, or None if parsing fails
+    """
+    try:
+        # Remove trailing semicolon and whitespace
+        newick_str = newick_str.strip().rstrip(';').strip()
+        
+        # Stack to track parent nodes
+        stack = []
+        current_node = SimpleNewickNode()
+        stack.append(current_node)
+        
+        i = 0
+        token = ""
+        
+        while i < len(newick_str):
+            char = newick_str[i]
+            
+            if char == '(':
+                # Start a new internal node
+                new_node = SimpleNewickNode()
+                current_node.children.append(new_node)
+                new_node.parent = current_node
+                stack.append(new_node)
+                current_node = new_node
+                token = ""
+                
+            elif char == ',':
+                # Process accumulated token as a leaf
+                if token:
+                    name, distance = _parse_node_info(token)
+                    leaf = SimpleNewickNode(name=name, distance=distance)
+                    leaf.parent = current_node
+                    current_node.children.append(leaf)
+                    token = ""
+                
+            elif char == ')':
+                # Process any remaining token
+                if token:
+                    name, distance = _parse_node_info(token)
+                    leaf = SimpleNewickNode(name=name, distance=distance)
+                    leaf.parent = current_node
+                    current_node.children.append(leaf)
+                    token = ""
+                
+                # Move up to parent
+                if len(stack) > 1:
+                    stack.pop()
+                    current_node = stack[-1]
+                
+                # Look for node label and distance after ')'
+                i += 1
+                label_token = ""
+                while i < len(newick_str) and newick_str[i] not in '(),;':
+                    label_token += newick_str[i]
+                    i += 1
+                
+                if label_token and current_node:
+                    name, distance = _parse_node_info(label_token)
+                    if name:
+                        current_node.name = name
+                    current_node.distance = distance
+                
+                i -= 1  # Adjust because we'll increment at the end
+                
+            else:
+                # Accumulate characters for node name/distance
+                token += char
+            
+            i += 1
+        
+        # Process any final token
+        if token:
+            name, distance = _parse_node_info(token)
+            if name:
+                current_node.name = name
+            current_node.distance = distance
+        
+        # Return the root (first node in stack)
+        return stack[0] if stack else None
+        
+    except Exception as e:
+        logger.error(f"Error parsing Newick tree: {e}")
+        return None
+
+
+def _parse_node_info(token: str) -> Tuple[str, float]:
+    """
+    Parse node name and distance from a token like 'name:0.123' or just 'name' or ':0.123'.
+    
+    Args:
+        token: Token string to parse
+        
+    Returns:
+        Tuple of (name, distance)
+    """
+    token = token.strip()
+    if ':' in token:
+        parts = token.split(':', 1)
+        name = parts[0].strip()
+        try:
+            distance = float(parts[1].strip())
+        except (ValueError, IndexError):
+            distance = 0.0
+        return name, distance
+    else:
+        return token, 0.0
+
+
+def find_nearest_neighbor_in_tree(
+    tree_file: Path,
+    query_id: str
+) -> Optional[str]:
+    """
+    Find the nearest neighbor (closest leaf) to a query sequence in a phylogenetic tree.
+    
+    This function parses the Newick tree and finds the leaf node that is phylogenetically
+    closest to the query sequence based on tree topology and branch lengths.
+    
+    Args:
+        tree_file: Path to the Newick tree file (.treefile)
+        query_id: Query sequence identifier to find neighbors for
+        
+    Returns:
+        Name of the nearest neighbor leaf node, or None if not found or error
+    """
+    try:
+        if not tree_file.exists():
+            logger.warning(f"Tree file not found: {tree_file}")
+            return None
+        
+        # Read the tree file
+        tree_content = tree_file.read_text().strip()
+        if not tree_content:
+            logger.warning(f"Empty tree file: {tree_file}")
+            return None
+        
+        # Parse the tree
+        root = parse_simple_newick(tree_content)
+        if not root:
+            logger.warning(f"Failed to parse tree file: {tree_file}")
+            return None
+        
+        # Find the query node
+        query_node = _find_node_by_name(root, query_id)
+        if not query_node:
+            logger.warning(f"Query {query_id} not found in tree {tree_file}")
+            return None
+        
+        # Get all leaves in the tree
+        all_leaves = root.get_leaves()
+        
+        # Find the closest leaf (excluding the query itself)
+        min_distance = float('inf')
+        nearest_neighbor = None
+        
+        for leaf in all_leaves:
+            # Skip the query itself
+            if leaf.name == query_id:
+                continue
+            
+            # Calculate distance between query and this leaf
+            distance = _calculate_tree_distance(query_node, leaf)
+            
+            if distance < min_distance:
+                min_distance = distance
+                nearest_neighbor = leaf.name
+        
+        return nearest_neighbor
+        
+    except Exception as e:
+        logger.error(f"Error finding nearest neighbor in tree {tree_file}: {e}")
+        return None
+
+
+def _find_node_by_name(node: SimpleNewickNode, name: str) -> Optional[SimpleNewickNode]:
+    """
+    Find a node with a given name in the tree.
+    
+    Args:
+        node: Node to start search from
+        name: Name to search for
+        
+    Returns:
+        Node with matching name, or None if not found
+    """
+    if node.name == name:
+        return node
+    
+    for child in node.children:
+        result = _find_node_by_name(child, name)
+        if result:
+            return result
+    
+    return None
+
+
+def _calculate_tree_distance(node1: SimpleNewickNode, node2: SimpleNewickNode) -> float:
+    """
+    Calculate the phylogenetic distance between two nodes in the tree.
+    
+    This finds the path from node1 to their most recent common ancestor (MRCA),
+    then from MRCA to node2, summing the branch lengths.
+    
+    Args:
+        node1: First node
+        node2: Second node
+        
+    Returns:
+        Total distance between the nodes
+    """
+    # Get paths from root to each node
+    path1 = _get_path_to_root(node1)
+    path2 = _get_path_to_root(node2)
+    
+    # Find the most recent common ancestor (MRCA)
+    # The paths are from node to root, so reverse them
+    path1.reverse()
+    path2.reverse()
+    
+    # Find where paths diverge
+    mrca_index = 0
+    for i in range(min(len(path1), len(path2))):
+        if path1[i] is path2[i]:
+            mrca_index = i
+        else:
+            break
+    
+    # Calculate distance: sum from node1 to MRCA + sum from MRCA to node2
+    distance = 0.0
+    
+    # Distance from node1 to MRCA
+    for i in range(mrca_index, len(path1)):
+        distance += path1[i].distance
+    
+    # Distance from node2 to MRCA
+    for i in range(mrca_index + 1, len(path2)):
+        distance += path2[i].distance
+    
+    return distance
+
+
+def _get_path_to_root(node: SimpleNewickNode) -> List[SimpleNewickNode]:
+    """
+    Get the path from a node to the root.
+    
+    Args:
+        node: Starting node
+        
+    Returns:
+        List of nodes from the starting node to root
+    """
+    path = []
+    current = node
+    while current:
+        path.append(current)
+        current = current.parent
+    return path
