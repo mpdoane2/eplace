@@ -17,4 +17,6 @@ conda activate eplace2
 
 if [[ $# != 2 ]]; then echo "$0  <fasta file> <output dir> " >&2; exit 1; fi
 
+# Note: This script does not build the combined tree (which can take many hours with large datasets).
+# To build the combined tree, add: --combined-tree-label-rank genus (or another taxonomic rank)
 eplace grouped --output-classification classifications.tsv --rank genus --group-rank class --tree-label-rank class --num-threads 32 $1 $2

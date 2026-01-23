@@ -287,12 +287,13 @@ Both workflows use taxonomic ranks to organize results:
   * Default: ``genus``
   * Determines taxonomic labels on phylogenetic tree
 
-* ``--combined-tree-label-rank`` (grouped only): Level at which to label the combined tree
+* ``--combined-tree-label-rank`` (grouped only): Level at which to label the combined tree (optional)
 
   * Options: ``phylum``, ``class``, ``order``, ``family``, ``genus``, ``species``
-  * Default: ``genus``
+  * Default: Not set (combined tree will not be built)
   * Controls labels on the combined tree built from all groups
   * Can be different from ``--tree-label-rank`` for more flexibility
+  * **Note:** Building the combined tree can be very time-consuming with large datasets, so it is only built when explicitly requested
 
 Filtering Parameters
 ~~~~~~~~~~~~~~~~~~~~

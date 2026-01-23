@@ -252,11 +252,11 @@ Taxonomy Options
 
 .. option:: --combined-tree-label-rank {phylum,class,order,family,genus,species}
 
-   Taxonomic rank for labeling the combined tree
+   Taxonomic rank for labeling the combined tree (optional)
    
-   Default: ``genus``
+   Default: Not set (combined tree will not be built)
    
-   The grouped workflow creates a combined tree from all groups. This parameter controls the taxonomic rank used for labeling that combined tree.
+   The grouped workflow can create a combined tree from all groups, but this is optional because it can be very time-consuming with large datasets. If you want to build the combined tree, specify this parameter with the desired taxonomic rank for labeling. If not provided, only individual group trees will be built.
 
 Filtering Options
 ^^^^^^^^^^^^^^^^^
