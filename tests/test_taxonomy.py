@@ -1205,7 +1205,7 @@ class TestGenerateClassificationSummary:
             assert data[col_idx['blast_hits']] == '2'
             assert data[col_idx['appears_in_multiple_groups']] == 'Yes'
             # Group name should be semicolon-separated and sorted
-            group_names = data[col_idx['group_name']].split('; ')
+            group_names = data[col_idx['blast_group_name']].split('; ')
             assert len(group_names) == 2
             assert 'Gammaproteobacteria' in group_names
             assert 'Mammalia' in group_names
@@ -1309,9 +1309,9 @@ class TestGenerateClassificationSummary:
                 sequences=seqs,
                 blast_hits=hits,
                 output_file=output_file,
-                rank='species',
-                group_rank='genus',
-                tree_label_rank='genus',
+                rank='genus',
+                group_rank='class',
+                tree_label_rank='family',
                 tree_files={'seq1': tree_file}
             )
             
@@ -1332,12 +1332,14 @@ class TestGenerateClassificationSummary:
             
             # BLAST-based classification should be Salmonella (subject1 - best bit score)
             assert 'Salmonella' in data[col_idx['blast_classification_name']]
-            assert 'Salmonella' in data[col_idx['blast_group_name']]
+            assert 'Gammaproteobacteria' in data[col_idx['blast_group_name']]
+            assert 'Enterobacteriaceae' in data[col_idx['blast_tree_label_name']]
             
             # Tree-based classification should be E. coli (subject2 - phylogenetically closest)
             assert data[col_idx['tree_based_classification']] == 'Yes'
-            assert 'Escherichia coli' in data[col_idx['tree_classification_name']]
-            assert 'Escherichia' in data[col_idx['tree_group_name']]
+            assert 'Escherichia' in data[col_idx['tree_classification_name']]
+            assert 'Gammaproteobacteria' in data[col_idx['tree_group_name']]
+            assert 'Enterobacteriaceae' in data[col_idx['tree_tree_label_name']]
     
     def test_generate_classification_summary_with_missing_tree(self):
         """Test classification falls back gracefully when tree is not available."""
