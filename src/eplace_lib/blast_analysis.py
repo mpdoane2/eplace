@@ -104,6 +104,13 @@ def _extract_accession_from_pipe_id(seq_id: str) -> str:
     - gb|MZ387488.1|               -> MZ387488.1
     - gnl|BL_ORD_ID|12345          -> 12345
     - MZ387488.1                   -> MZ387488.1 (returned unchanged)
+    - sampleA|42                   -> sampleA|42 (no known pattern, returned unchanged)
+
+    No generic fallback is applied: if the ID contains pipes but does not match
+    a known NCBI format (gnl or a standard db-prefix like gb/ref/emb/…), the
+    original string is returned unchanged.  This prevents unrelated IDs that
+    share the same trailing pipe-segment (e.g. ``sampleA|42`` and
+    ``sampleB|42``) from being incorrectly considered equivalent.
 
     Args:
         seq_id: Sequence identifier, which may or may not be pipe-delimited.
@@ -124,11 +131,6 @@ def _extract_accession_from_pipe_id(seq_id: str) -> str:
             if part in db_identifiers:
                 if i + 1 < len(parts) and parts[i + 1]:
                     return parts[i + 1]
-
-        # Fallback: last non-empty, non-'gi' part
-        non_empty = [p for p in parts if p and p != 'gi']
-        if non_empty:
-            return non_empty[-1]
 
     return seq_id
 
