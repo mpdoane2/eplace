@@ -105,6 +105,17 @@ def test_cli_imports():
     assert 'from pathlib import Path' in source, "Missing Path import"
 
 
+def test_cli_has_log_level_argument():
+    """Test that the CLI module defines a --log-level argument."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    assert '--log-level' in source, "CLI module missing --log-level argument"
+    for level in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
+        assert level in source, f"Log level choice '{level}' not found in CLI module"
+
+
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
@@ -117,6 +128,7 @@ if __name__ == '__main__':
         test_entry_point_registered,
         test_cli_module_has_docstring,
         test_cli_imports,
+        test_cli_has_log_level_argument,
     ]
     
     passed = 0
