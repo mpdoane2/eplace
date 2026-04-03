@@ -864,7 +864,7 @@ Examples:
   eplace grouped query.fasta output_dir --group-rank order
   
   # Relabel a tree with taxonomic names (use blast_results.txt for BLAST, mmseqs_results.txt for MMseqs2)
-  eplace relabel search_results.txt input.treefile output.treefile --rank genus
+  eplace relabel blast_results.txt input.treefile output.treefile --rank genus
   
 For detailed help on each subcommand:
   eplace download --help
