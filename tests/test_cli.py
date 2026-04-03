@@ -106,14 +106,52 @@ def test_cli_imports():
 
 
 def test_cli_has_log_level_argument():
-    """Test that the CLI module defines a --log-level argument."""
+    """Test that the CLI module defines a --log-level argument with correct choices and default."""
     cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
     with open(cli_path, 'r') as f:
         source = f.read()
 
-    assert '--log-level' in source, "CLI module missing --log-level argument"
-    for level in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
-        assert level in source, f"Log level choice '{level}' not found in CLI module"
+    tree = ast.parse(source)
+    expected_levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+    log_level_call = None
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != 'add_argument':
+            continue
+
+        option_strings = []
+        for arg in node.args:
+            try:
+                value = ast.literal_eval(arg)
+            except (ValueError, SyntaxError):
+                continue
+            if isinstance(value, str):
+                option_strings.append(value)
+
+        if '--log-level' in option_strings:
+            log_level_call = node
+            break
+
+    assert log_level_call is not None, "CLI module missing --log-level argument"
+
+    keyword_values = {}
+    for keyword in log_level_call.keywords:
+        if keyword.arg is None:
+            continue
+        try:
+            keyword_values[keyword.arg] = ast.literal_eval(keyword.value)
+        except (ValueError, SyntaxError):
+            keyword_values[keyword.arg] = None
+
+    assert 'choices' in keyword_values, "--log-level argument missing choices"
+    assert tuple(keyword_values['choices']) == expected_levels, (
+        f"--log-level choices should be {expected_levels}"
+    )
+    assert keyword_values.get('default') == 'INFO', (
+        "--log-level argument should default to 'INFO'"
+    )
 
 
 if __name__ == '__main__':
