@@ -113,51 +113,145 @@ def test_cli_has_log_level_argument():
 
     tree = ast.parse(source)
     expected_levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
-    log_level_call = None
 
+    # Check that _LOG_LEVEL_CHOICES constant is defined with the expected values, OR that a
+    # direct add_argument('--log-level', choices=[...]) call uses the right choices list.
+    choices_found = False
+
+    # 1. Look for a module-level constant assignment: _LOG_LEVEL_CHOICES = [...]
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == '_LOG_LEVEL_CHOICES':
+                try:
+                    value = ast.literal_eval(node.value)
+                    assert tuple(value) == expected_levels, (
+                        f"_LOG_LEVEL_CHOICES should be {expected_levels}, got {value}"
+                    )
+                    choices_found = True
+                except (ValueError, SyntaxError):
+                    pass
+
+    # 2. Fallback: look for inline choices=[...] on any add_argument('--log-level', ...) call
+    if not choices_found:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute) or node.func.attr != 'add_argument':
+                continue
+            option_strings = [
+                ast.literal_eval(a)
+                for a in node.args
+                if isinstance(a, ast.Constant) and isinstance(a.value, str)
+            ]
+            if '--log-level' not in option_strings:
+                continue
+            for kw in node.keywords:
+                if kw.arg == 'choices':
+                    try:
+                        value = ast.literal_eval(kw.value)
+                        assert tuple(value) == expected_levels, (
+                            f"--log-level choices should be {expected_levels}, got {value}"
+                        )
+                        choices_found = True
+                    except (ValueError, SyntaxError):
+                        pass
+
+    assert choices_found, (
+        "CLI module must define --log-level choices either via a _LOG_LEVEL_CHOICES "
+        "constant or as an inline list in add_argument('--log-level', choices=[...])"
+    )
+
+    # Verify the top-level parser defaults to 'INFO'.  The helper _add_log_level_argument
+    # uses is_top_level=True for the main parser, so look for that call.
+    top_level_default_ok = False
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if not isinstance(node.func, ast.Attribute) or node.func.attr != 'add_argument':
-            continue
+        func = node.func
+        # Check _add_log_level_argument(parser, is_top_level=True)
+        if isinstance(func, ast.Name) and func.id == '_add_log_level_argument':
+            for kw in node.keywords:
+                if kw.arg == 'is_top_level':
+                    try:
+                        if ast.literal_eval(kw.value) is True:
+                            top_level_default_ok = True
+                    except (ValueError, SyntaxError):
+                        pass
+        # Check direct add_argument('--log-level', default='INFO', ...)
+        if isinstance(func, ast.Attribute) and func.attr == 'add_argument':
+            option_strings = [
+                ast.literal_eval(a)
+                for a in node.args
+                if isinstance(a, ast.Constant) and isinstance(a.value, str)
+            ]
+            if '--log-level' in option_strings:
+                for kw in node.keywords:
+                    if kw.arg == 'default':
+                        try:
+                            if ast.literal_eval(kw.value) == 'INFO':
+                                top_level_default_ok = True
+                        except (ValueError, SyntaxError):
+                            pass
 
-        option_strings = []
-        for arg in node.args:
-            try:
-                value = ast.literal_eval(arg)
-            except (ValueError, SyntaxError):
-                continue
-            if isinstance(value, str):
-                option_strings.append(value)
-
-        if '--log-level' in option_strings:
-            log_level_call = node
-            break
-
-    assert log_level_call is not None, "CLI module missing --log-level argument"
-
-    keyword_values = {}
-    for keyword in log_level_call.keywords:
-        if keyword.arg is None:
-            continue
-        try:
-            keyword_values[keyword.arg] = ast.literal_eval(keyword.value)
-        except (ValueError, SyntaxError):
-            keyword_values[keyword.arg] = None
-
-    assert 'choices' in keyword_values, "--log-level argument missing choices"
-    assert tuple(keyword_values['choices']) == expected_levels, (
-        f"--log-level choices should be {expected_levels}"
+    assert top_level_default_ok, (
+        "Top-level parser --log-level should default to 'INFO' "
+        "(either via _add_log_level_argument(..., is_top_level=True) or default='INFO')"
     )
-    assert keyword_values.get('default') == 'INFO', (
-        "--log-level argument should default to 'INFO'"
+
+
+def test_cli_log_level_in_all_subparsers():
+    """Test that --log-level is added to every subparser so it works after subcommands."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    # Record which parser variables have --log-level registered, accepting two forms:
+    # 1. Direct call:  parser_var.add_argument('--log-level', ...)
+    # 2. Helper call:  _add_log_level_argument(parser_var, ...)
+    log_level_parsers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+
+        # Form 1: <parser_var>.add_argument('--log-level', ...)
+        if isinstance(func, ast.Attribute) and func.attr == 'add_argument':
+            has_log_level = any(
+                isinstance(a, ast.Constant) and a.value == '--log-level'
+                for a in node.args
+            )
+            if has_log_level and isinstance(func.value, ast.Name):
+                log_level_parsers.add(func.value.id)
+
+        # Form 2: _add_log_level_argument(parser_var, ...)
+        if isinstance(func, ast.Name) and func.id == '_add_log_level_argument':
+            if node.args and isinstance(node.args[0], ast.Name):
+                log_level_parsers.add(node.args[0].id)
+
+    expected_parsers = {
+        'parser',
+        'download_parser',
+        'blast_parser',
+        'grouped_parser',
+        'relabel_parser',
+    }
+    missing_parsers = expected_parsers - log_level_parsers
+
+    assert not missing_parsers, (
+        "Expected --log-level to be defined on the top-level parser and all subparsers, "
+        f"but it was missing from: {sorted(missing_parsers)}. "
+        f"Found on: {sorted(log_level_parsers)}"
     )
 
 
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
-    
+
     tests = [
         test_cli_module_exists,
         test_cli_syntax,
@@ -167,6 +261,7 @@ if __name__ == '__main__':
         test_cli_module_has_docstring,
         test_cli_imports,
         test_cli_has_log_level_argument,
+        test_cli_log_level_in_all_subparsers,
     ]
     
     passed = 0
