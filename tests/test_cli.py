@@ -178,10 +178,12 @@ def test_cli_log_level_in_all_subparsers():
                 log_level_calls += 1
                 break
 
-    # Expect one call on the top-level parser + one per subparser (download, blast, grouped, relabel)
-    assert log_level_calls >= 5, (
-        f"Expected --log-level to be defined in top-level parser and all 4 subparsers, "
-        f"but found only {log_level_calls} add_argument('--log-level', ...) call(s)"
+    # Expect one call on the top-level parser + one per subparser:
+    # download, blast, grouped, relabel = 4 subparsers → 5 total
+    expected_calls = 5
+    assert log_level_calls >= expected_calls, (
+        f"Expected --log-level to be defined in top-level parser and all 4 subparsers "
+        f"({expected_calls} total), but found only {log_level_calls} add_argument('--log-level', ...) call(s)"
     )
 
 

@@ -1257,7 +1257,8 @@ Notes:
     args = parser.parse_args()
     
     # Set logging level: subcommand --log-level takes precedence over top-level
-    log_level = getattr(args, 'log_level', None) or 'INFO'
+    log_level = getattr(args, 'log_level', None)
+    log_level = log_level if log_level is not None else 'INFO'
     logging.getLogger().setLevel(getattr(logging, log_level))
     
     # If no command provided, show help
