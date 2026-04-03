@@ -502,7 +502,7 @@ class MMseqs2Runner:
         Initialize the MMseqs2Runner.
 
         Args:
-            db_path: Path to the MMseqs2 database directory.  If None the
+            db_path: Path to the MMseqs2 database directory. If None the
                 ``MMSEQS2DB`` environment variable is used; if that is also
                 unset the directory ``~/mmseqs2db`` is used.
         """

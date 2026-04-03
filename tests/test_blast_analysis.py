@@ -545,7 +545,7 @@ class TestMMseqs2Runner:
             assert hits[0].subject_taxids == "0"
 
     def test_parse_mmseqs_results_na_taxid(self):
-        """Test that N/A taxid values are normalised to '0'."""
+        """Test that N/A taxid values are normalized to '0'."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             mmseqs_output = tmppath / "mmseqs_results.txt"
