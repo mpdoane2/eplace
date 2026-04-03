@@ -903,6 +903,12 @@ Notes:
         action='store_true',
         help='Force redownload even if database exists'
     )
+    download_parser.add_argument(
+        '--log-level',
+        default=argparse.SUPPRESS,
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set logging verbosity level (default: INFO)'
+    )
     
     # BLAST subcommand (individual workflow)
     blast_parser = subparsers.add_parser(
@@ -1028,6 +1034,12 @@ Notes:
         type=Path,
         default=None,
         help='Path to output classification TSV file'
+    )
+    blast_parser.add_argument(
+        '--log-level',
+        default=argparse.SUPPRESS,
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set logging verbosity level (default: INFO)'
     )
     
     # Grouped subcommand
@@ -1176,6 +1188,12 @@ Notes:
         default=None,
         help='Path to output classification TSV file'
     )
+    grouped_parser.add_argument(
+        '--log-level',
+        default=argparse.SUPPRESS,
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set logging verbosity level (default: INFO)'
+    )
     
     # Relabel subcommand
     relabel_parser = subparsers.add_parser(
@@ -1228,12 +1246,19 @@ Notes:
         default=None,
         help='Path to BLAST database directory (optional, not required for relabeling)'
     )
+    relabel_parser.add_argument(
+        '--log-level',
+        default=argparse.SUPPRESS,
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set logging verbosity level (default: INFO)'
+    )
     
     # Parse arguments
     args = parser.parse_args()
     
-    # Set logging level from --log-level argument
-    logging.getLogger().setLevel(getattr(logging, args.log_level))
+    # Set logging level: subcommand --log-level takes precedence over top-level
+    log_level = getattr(args, 'log_level', None) or 'INFO'
+    logging.getLogger().setLevel(getattr(logging, log_level))
     
     # If no command provided, show help
     if not args.command:

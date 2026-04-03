@@ -154,10 +154,41 @@ def test_cli_has_log_level_argument():
     )
 
 
+def test_cli_log_level_in_all_subparsers():
+    """Test that --log-level is added to every subparser so it works after subcommands."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    # Count all add_argument('--log-level', ...) calls
+    log_level_calls = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != 'add_argument':
+            continue
+        for arg in node.args:
+            try:
+                value = ast.literal_eval(arg)
+            except (ValueError, SyntaxError):
+                continue
+            if value == '--log-level':
+                log_level_calls += 1
+                break
+
+    # Expect one call on the top-level parser + one per subparser (download, blast, grouped, relabel)
+    assert log_level_calls >= 5, (
+        f"Expected --log-level to be defined in top-level parser and all 4 subparsers, "
+        f"but found only {log_level_calls} add_argument('--log-level', ...) call(s)"
+    )
+
+
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
-    
+
     tests = [
         test_cli_module_exists,
         test_cli_syntax,
@@ -167,6 +198,7 @@ if __name__ == '__main__':
         test_cli_module_has_docstring,
         test_cli_imports,
         test_cli_has_log_level_argument,
+        test_cli_log_level_in_all_subparsers,
     ]
     
     passed = 0
