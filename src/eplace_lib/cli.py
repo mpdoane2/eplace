@@ -29,9 +29,8 @@ from .alignment import (
     concatenate_all_groups_and_build_tree
 )
 
-# Configure logging
+# Configure logging (level is overridden at runtime via --log-level)
 logging.basicConfig(
-    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -865,6 +864,13 @@ Documentation: https://github.com/linsalrob/eplace
         version='%(prog)s 0.1.0'
     )
     
+    parser.add_argument(
+        '--log-level',
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set logging verbosity level (default: INFO)'
+    )
+    
     subparsers = parser.add_subparsers(
         dest='command',
         title='Available commands',
@@ -1225,6 +1231,9 @@ Notes:
     
     # Parse arguments
     args = parser.parse_args()
+    
+    # Set logging level from --log-level argument
+    logging.getLogger().setLevel(getattr(logging, args.log_level))
     
     # If no command provided, show help
     if not args.command:
