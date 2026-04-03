@@ -298,10 +298,16 @@ def test_cli_has_write_search_metadata_function():
 def _load_cli_module_for_testing():
     """Load cli.py with all unavailable dependencies mocked out.
 
-    cli.py cannot be imported directly in the test environment because
-    its module-level imports (taxonomy -> pytaxonkit) are unavailable.
-    This helper stubs those dependencies so that importlib can load the
-    file and expose its pure-Python helpers for functional testing.
+    This helper is used for isolated unit testing of pure-Python helpers
+    defined in ``cli.py`` (such as ``_write_search_metadata``) without
+    loading the full ePLACE dependency stack.  Integration tests that
+    exercise the complete workflow still require pytaxonkit to be installed
+    via conda/mamba as described in INSTALL.md.
+
+    The loaded module object is returned directly.  All stubbed entries are
+    scoped to the ``patch.dict`` context manager and are removed from
+    ``sys.modules`` before this function returns, so repeated calls each
+    produce a fresh module instance without cross-test contamination.
 
     Returns:
         The loaded cli module object.
@@ -321,12 +327,14 @@ def _load_cli_module_for_testing():
         'eplace_lib.alignment': MagicMock(),
     }
 
-    # Name the spec as "eplace_lib.cli" so that spec.parent == "eplace_lib",
-    # which matches the relative imports used inside cli.py.
+    # Name the spec as "eplace_lib._cli_under_test" so that spec.parent
+    # == "eplace_lib", matching the relative imports used inside cli.py.
     module_name = 'eplace_lib._cli_under_test'
     spec = importlib.util.spec_from_file_location(module_name, cli_path)
     module = importlib.util.module_from_spec(spec)
 
+    # patch.dict restores sys.modules to its original state when the
+    # context manager exits, so no stub leaks between test invocations.
     with patch.dict(sys.modules, {**stubs, module_name: module}):
         spec.loader.exec_module(module)
 

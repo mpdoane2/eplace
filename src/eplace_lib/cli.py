@@ -111,8 +111,8 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
         logger.warning(
             "No explicit --mmseqs-database provided; defaulting to '%s'. "
             "Ensure that an MMseqs2-formatted database named '%s' exists at "
-            "the specified path, built from the same sequence content as "
-            "BLAST core_nt.",
+            "the configured database location, built from the same sequence "
+            "content as BLAST core_nt.",
             mmseqs_database, mmseqs_database
         )
     if not args.mmseqs_db_path:
