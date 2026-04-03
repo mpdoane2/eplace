@@ -15,7 +15,9 @@ from .blast_analysis import (
     BlastHit,
     FastaReader,
     BlastRunner,
-    run_blast_search
+    run_blast_search,
+    MMseqs2Runner,
+    run_mmseqs_search
 )
 from .taxonomy import (
     TaxonomyExtractor,
@@ -46,6 +48,8 @@ __all__ = [
     "FastaReader",
     "BlastRunner",
     "run_blast_search",
+    "MMseqs2Runner",
+    "run_mmseqs_search",
     "TaxonomyExtractor",
     "SequenceExtractor",
     "process_blast_results_for_taxonomy",
