@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from collections import defaultdict
 
-from .blast_analysis import BlastHit
+from .blast_analysis import BlastHit, normalize_sequence_id
 
 import pytaxonkit
 
@@ -153,7 +153,7 @@ class TaxonomyExtractor:
             if preferred_subject_id:
                 # Look for the preferred representative in the current hits
                 preferred_hit = next(
-                    (hit for hit in rank_hits if hit.subject_id == preferred_subject_id),
+                    (hit for hit in rank_hits if hit.get_accession() == normalize_sequence_id(preferred_subject_id)),
                     None
                 )
                 
@@ -617,12 +617,12 @@ def generate_classification_summary(
                 nearest_neighbor = find_nearest_neighbor_in_tree(tree_file, query_id)
                 
                 if nearest_neighbor:
-                    # Find the BLAST hit corresponding to the nearest neighbor
-                    # The nearest neighbor name might have the _R_ prefix (from MAFFT reverse complement)
-                    # or might be a sanitized version of the subject_id
+                    # Find the BLAST hit corresponding to the nearest neighbor.
+                    # Normalize both sides to canonical accessions so that IDs like
+                    # gi|...|gb|HQ641676.1| and HQ641676.1 compare as equal.
+                    normalized_neighbor = normalize_sequence_id(nearest_neighbor)
                     for hit in query_hits:
-                        # Check direct match or match with _R_ prefix
-                        if hit.subject_id == nearest_neighbor or hit.subject_id == nearest_neighbor.replace('_R_', ''):
+                        if hit.get_accession() == normalized_neighbor:
                             tree_best_hit = hit
                             classification['tree_based_classification'] = 'Yes'
                             break

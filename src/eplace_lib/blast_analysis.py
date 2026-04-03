@@ -119,6 +119,66 @@ class BlastHit:
         # If no pipes or couldn't parse, assume it's already an accession
         return self.subject_id
 
+def normalize_sequence_id(seq_id: str) -> str:
+    """
+    Normalize an arbitrary sequence or tree label to a canonical accession-like identifier.
+
+    This is used to compare IDs from different sources (BLAST subject IDs, FASTA headers,
+    tree leaf labels) that may be formatted differently but refer to the same sequence.
+
+    Normalization steps:
+    1. Strip a leading '>' (FASTA header prefix).
+    2. Take only the first whitespace-delimited token.
+    3. Remove MAFFT reverse-complement markers: a leading '_R_' prefix or a trailing '_R_' suffix.
+    4. If the token contains pipes ('|'), extract the accession using the same rules as
+       BlastHit.get_accession() (gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.).
+    5. Otherwise return the token unchanged.
+
+    Args:
+        seq_id: Raw sequence identifier from any source.
+
+    Returns:
+        Canonical accession string suitable for exact comparison.
+    """
+    if not seq_id:
+        return seq_id
+
+    # Step 1: strip leading '>'
+    token = seq_id.lstrip('>')
+
+    # Step 2: take first whitespace-delimited token
+    token = token.split()[0] if token.split() else token
+
+    # Step 3: remove MAFFT reverse-complement markers
+    if token.startswith('_R_'):
+        token = token[3:]
+    if token.endswith('_R_'):
+        token = token[:-3]
+
+    # Step 4: parse pipe-delimited NCBI-style identifiers
+    if '|' in token:
+        parts = token.split('|')
+
+        # gnl|database|identifier
+        if len(parts) >= 3 and parts[0] == 'gnl':
+            return parts[2]
+
+        # Known database prefixes: gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.
+        db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
+        for i, part in enumerate(parts):
+            if part in db_identifiers:
+                if i + 1 < len(parts) and parts[i + 1]:
+                    return parts[i + 1]
+
+        # Fallback: last non-empty, non-'gi' part
+        known_prefixes = {'gi'}
+        non_empty = [p for p in parts if p and p not in known_prefixes]
+        if non_empty:
+            return non_empty[-1]
+
+    return token
+
+
 class FastaReader:
     """
     Class for reading FASTA files.

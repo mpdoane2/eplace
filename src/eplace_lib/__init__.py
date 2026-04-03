@@ -17,7 +17,8 @@ from .blast_analysis import (
     BlastRunner,
     run_blast_search,
     MMseqs2Runner,
-    run_mmseqs_search
+    run_mmseqs_search,
+    normalize_sequence_id
 )
 from .taxonomy import (
     TaxonomyExtractor,
@@ -50,6 +51,7 @@ __all__ = [
     "run_blast_search",
     "MMseqs2Runner",
     "run_mmseqs_search",
+    "normalize_sequence_id",
     "TaxonomyExtractor",
     "SequenceExtractor",
     "process_blast_results_for_taxonomy",

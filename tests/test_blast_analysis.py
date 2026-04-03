@@ -13,7 +13,8 @@ from eplace_lib.blast_analysis import (
     BlastHit,
     run_blast_search,
     MMseqs2Runner,
-    run_mmseqs_search
+    run_mmseqs_search,
+    normalize_sequence_id
 )
 
 
@@ -456,6 +457,50 @@ class TestBlastHit:
             subject_taxids="12345"
         )
         assert hit.get_accession() == "12345"
+
+
+class TestNormalizeSequenceId:
+    """Test cases for normalize_sequence_id helper."""
+
+    def test_gi_gb_format(self):
+        """gi|...|gb|ACC| normalizes to ACC."""
+        assert normalize_sequence_id("gi|336317909|gb|HQ641676.1|") == "HQ641676.1"
+
+    def test_ref_format(self):
+        """ref|ACC| normalizes to ACC."""
+        assert normalize_sequence_id("ref|NZ_CP123456.1|") == "NZ_CP123456.1"
+
+    def test_gb_format(self):
+        """gb|ACC| normalizes to ACC."""
+        assert normalize_sequence_id("gb|MZ387488.1|") == "MZ387488.1"
+
+    def test_plain_accession(self):
+        """A plain accession is returned unchanged."""
+        assert normalize_sequence_id("HQ641676.1") == "HQ641676.1"
+
+    def test_fasta_header_with_description(self):
+        """>ACC description ... normalizes to ACC."""
+        assert normalize_sequence_id(">HQ641676.1 Genypterus capensis voucher SAIAB 79629") == "HQ641676.1"
+
+    def test_fasta_header_gi_with_description(self):
+        """>gi|...|gb|ACC| description normalizes to ACC."""
+        assert normalize_sequence_id(">gi|336317909|gb|HQ641676.1| Genypterus capensis") == "HQ641676.1"
+
+    def test_mafft_leading_r_prefix(self):
+        """_R_ACC (MAFFT reverse-complement marker) normalizes to ACC."""
+        assert normalize_sequence_id("_R_HQ641676.1") == "HQ641676.1"
+
+    def test_mafft_trailing_r_suffix(self):
+        """ACC_R_ (MAFFT reverse-complement marker) normalizes to ACC."""
+        assert normalize_sequence_id("HQ641676.1_R_") == "HQ641676.1"
+
+    def test_empty_string(self):
+        """Empty string is returned as-is."""
+        assert normalize_sequence_id("") == ""
+
+    def test_plain_accession_gi_gb_round_trip(self):
+        """gi|...|gb|ACC| and plain ACC normalize to the same value."""
+        assert normalize_sequence_id("gi|336317909|gb|HQ641676.1|") == normalize_sequence_id("HQ641676.1")
 
 
 class TestMMseqs2Runner:
