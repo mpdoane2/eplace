@@ -152,8 +152,9 @@ class TaxonomyExtractor:
             
             if preferred_subject_id:
                 # Look for the preferred representative in the current hits
+                normalized_preferred = normalize_sequence_id(preferred_subject_id)
                 preferred_hit = next(
-                    (hit for hit in rank_hits if hit.get_accession() == normalize_sequence_id(preferred_subject_id)),
+                    (hit for hit in rank_hits if hit.get_accession() == normalized_preferred),
                     None
                 )
                 

@@ -147,7 +147,8 @@ def normalize_sequence_id(seq_id: str) -> str:
     token = seq_id.lstrip('>')
 
     # Step 2: take first whitespace-delimited token
-    token = token.split()[0] if token.split() else token
+    parts = token.split()
+    token = parts[0] if parts else token
 
     # Step 3: remove MAFFT reverse-complement markers
     if token.startswith('_R_'):
