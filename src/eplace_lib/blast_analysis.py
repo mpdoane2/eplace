@@ -552,6 +552,17 @@ class MMseqs2Runner:
     ``mmseqs createdb``) or a FASTA file that MMseqs2 indexes automatically.
     Taxonomy fields (taxid) are populated only when the database was built with
     taxonomy information (``mmseqs createtaxdb``); otherwise they default to "0".
+
+    **Database selection**: To keep results comparable with the BLAST workflow
+    (which uses NCBI ``core_nt``), the recommended MMseqs2 database should be
+    built from the same underlying sequence collection as ``core_nt``.  This
+    means creating an MMseqs2 database from the FASTA sequences that make up
+    NCBI ``core_nt`` (e.g. by exporting them with ``blastdbcmd -db core_nt
+    -entry all`` and then running ``mmseqs createdb``).  Using a different
+    nucleotide collection will change the search space and may produce
+    classification differences that reflect the database rather than the search
+    algorithm.  There is no official pre-built MMseqs2 ``core_nt`` database;
+    users must provide their own.
     """
 
     def __init__(self, db_path: Optional[Path] = None):
@@ -611,7 +622,11 @@ class MMseqs2Runner:
         Args:
             query_fasta: Path to query FASTA file
             output_file: Path to output file
-            database: Name of MMseqs2 database inside ``db_path`` (default: "core_nt")
+            database: Name of the MMseqs2 database inside ``db_path``
+                (default: "core_nt").  There is no official pre-built MMseqs2
+                ``core_nt`` database; users must build their own from the same
+                sequence collection as BLAST ``core_nt`` to keep results
+                comparable across backends.
             num_threads: Number of threads to use
             max_target_seqs: Maximum number of target sequences to report
             evalue: E-value threshold
@@ -826,6 +841,14 @@ def run_mmseqs_search(
 ) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run an MMseqs2 search and return filtered hits.
+
+    To keep results comparable with the BLAST workflow (which searches NCBI
+    ``core_nt``), the MMseqs2 database should be built from the same underlying
+    sequence collection as ``core_nt``.  There is no official pre-built MMseqs2
+    ``core_nt`` database; users must create one from the relevant FASTA
+    sequences (e.g. exported from BLAST ``core_nt`` with ``blastdbcmd``).
+    Using a different nucleotide collection changes the search space and may
+    produce classification differences unrelated to the choice of search engine.
 
     Args:
         query_fasta: Path to query FASTA file

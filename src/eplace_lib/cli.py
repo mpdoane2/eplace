@@ -7,6 +7,7 @@ Provides unified access to database download, BLAST analysis, and grouped workfl
 """
 
 import sys
+import json
 import argparse
 import logging
 from pathlib import Path
@@ -34,6 +35,134 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _write_search_metadata(
+    output_dir: Path,
+    search_backend: str,
+    database_name: str,
+    database_path: str,
+    database_source: str
+) -> None:
+    """Write backend and database provenance to a JSON metadata file.
+
+    The file is written to ``<output_dir>/search_metadata.json`` and contains
+    the following keys:
+
+    * ``search_backend`` – the sequence search tool used (``blast`` or ``mmseqs2``)
+    * ``database_name``  – the database name passed to the search tool
+    * ``database_path``  – the directory that holds the database files
+    * ``database_source`` – a human-readable label describing where the
+      database originates (e.g. ``ncbi_core_nt`` or a user-supplied string
+      such as ``ncbi_core_nt_derived_mmseqs2``)
+
+    Args:
+        output_dir: Output directory for the current run.
+        search_backend: Name of the search backend (``blast`` or ``mmseqs2``).
+        database_name: Name of the database used for the search.
+        database_path: Path to the database directory.
+        database_source: Provenance label for the database.
+    """
+    metadata = {
+        "search_backend": search_backend,
+        "database_name": database_name,
+        "database_path": database_path,
+        "database_source": database_source,
+    }
+    metadata_file = output_dir / "search_metadata.json"
+    try:
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+        logger.info(f"Search metadata written to: {metadata_file}")
+    except OSError as e:
+        logger.warning(f"Could not write search metadata file: {e}")
+
+
+def _effective_mmseqs_database(args) -> str:
+    """Return the effective MMseqs2 database name from parsed arguments.
+
+    If ``--mmseqs-database`` was given explicitly, that value is used.
+    Otherwise the value of ``--database`` (which defaults to ``core_nt``) is
+    returned as a fallback so that the same reference corpus is targeted as
+    in the BLAST workflow.
+
+    Args:
+        args: Parsed argument namespace from argparse.
+
+    Returns:
+        The database name to pass to MMseqs2Runner.
+    """
+    return args.mmseqs_database if args.mmseqs_database else args.database
+
+
+def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
+    """Emit advisory warnings when MMseqs2 database configuration is incomplete.
+
+    Warns the user if any of the following are not set:
+    - ``--mmseqs-database`` (defaulting to ``--database``)
+    - ``--mmseqs-db-path`` (falling back to environment / home directory)
+    - ``--mmseqs-db-source`` (no provenance label provided)
+
+    Args:
+        args: Parsed argument namespace from argparse.
+        mmseqs_database: The effective MMseqs2 database name (after fallback).
+    """
+    if not args.mmseqs_database:
+        logger.warning(
+            "No explicit --mmseqs-database provided; defaulting to '%s'. "
+            "Ensure that an MMseqs2-formatted database named '%s' exists at "
+            "the specified path, built from the same sequence content as "
+            "BLAST core_nt.",
+            mmseqs_database, mmseqs_database
+        )
+    if not args.mmseqs_db_path:
+        logger.warning(
+            "No --mmseqs-db-path provided. The MMseqs2 database directory "
+            "will be resolved from $MMSEQS2DB or ~/mmseqs2db. For "
+            "reproducibility, explicitly specify --mmseqs-db-path pointing "
+            "to a database built from the same sequence universe as BLAST "
+            "core_nt."
+        )
+    if not args.mmseqs_db_source:
+        logger.warning(
+            "No --mmseqs-db-source provided. Use this flag to document the "
+            "provenance of your MMseqs2 database (e.g. "
+            "'ncbi_core_nt_derived_mmseqs2') so that results remain "
+            "reproducible and comparable with the BLAST workflow."
+        )
+
+
+def _write_backend_search_metadata(args, mmseqs_database: str) -> None:
+    """Resolve backend paths and write provenance metadata to the output directory.
+
+    For BLAST the ``database_source`` is always ``ncbi_core_nt``.  For MMseqs2
+    the ``database_source`` is the value of ``--mmseqs-db-source`` (empty
+    string if not provided).
+
+    Args:
+        args: Parsed argument namespace from argparse.
+        mmseqs_database: The effective MMseqs2 database name (after fallback).
+    """
+    if args.search_tool == 'mmseqs2':
+        from .blast_analysis import MMseqs2Runner
+        resolved_path = MMseqs2Runner(args.mmseqs_db_path).db_path
+        _write_search_metadata(
+            output_dir=args.output_dir,
+            search_backend="mmseqs2",
+            database_name=mmseqs_database,
+            database_path=str(resolved_path),
+            database_source=args.mmseqs_db_source or ""
+        )
+    else:
+        from .blast_analysis import BlastRunner
+        resolved_path = BlastRunner(args.blastdb_path).blastdb_path
+        _write_search_metadata(
+            output_dir=args.output_dir,
+            search_backend="blast",
+            database_name=args.database,
+            database_path=str(resolved_path),
+            database_source="ncbi_core_nt"
+        )
 
 
 def download_command(args):
@@ -76,6 +205,9 @@ def blast_command(args):
     
     skip_existing = not args.overwrite_existing_blast
 
+    # Determine effective MMseqs2 database name early so it can be logged
+    mmseqs_database = _effective_mmseqs_database(args)
+
     logger.info("=" * 60)
     logger.info("ePLACE Search Workflow")
     logger.info("=" * 60)
@@ -87,10 +219,22 @@ def blast_command(args):
     logger.info(f"Classification output file: {args.output_classification}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
-    logger.info(f"Database: {args.database}")
     logger.info(f"Threads: {args.num_threads}")
+    if args.search_tool == 'mmseqs2':
+        logger.info(f"Search backend: mmseqs2")
+        logger.info(f"MMseqs2 database name: {mmseqs_database}")
+        logger.info(f"MMseqs2 database path: {args.mmseqs_db_path or '(default: $MMSEQS2DB or ~/mmseqs2db)'}")
+        logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
+        _log_mmseqs_database_warnings(args, mmseqs_database)
+    else:
+        logger.info(f"Search backend: blast")
+        logger.info(f"Database: {args.database}")
+        logger.info(f"BLAST database path: {args.blastdb_path or '(default: $BLASTDB or ~/blastdb)'}")
     logger.info("=" * 60)
-    
+
+    # Write search metadata for provenance tracking
+    _write_backend_search_metadata(args, mmseqs_database)
+
     # Step 1: Read query sequences
     logger.info("\n[Step 1/5] Reading query sequences...")
     try:
@@ -106,7 +250,6 @@ def blast_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/5] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
-        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
@@ -489,6 +632,9 @@ def grouped_command(args):
     
     skip_existing = not args.overwrite_existing_blast
 
+    # Determine effective MMseqs2 database name early so it can be logged
+    mmseqs_database = _effective_mmseqs_database(args)
+
     logger.info("=" * 60)
     logger.info("ePLACE Grouped Search Workflow")
     logger.info("=" * 60)
@@ -501,10 +647,22 @@ def grouped_command(args):
     logger.info(f"Classification output file: {args.output_classification}")
     logger.info(f"Min identity: {args.min_identity}%")
     logger.info(f"Min coverage: {args.min_coverage}%")
-    logger.info(f"Database: {args.database}")
     logger.info(f"Threads: {args.num_threads}")
+    if args.search_tool == 'mmseqs2':
+        logger.info(f"Search backend: mmseqs2")
+        logger.info(f"MMseqs2 database name: {mmseqs_database}")
+        logger.info(f"MMseqs2 database path: {args.mmseqs_db_path or '(default: $MMSEQS2DB or ~/mmseqs2db)'}")
+        logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
+        _log_mmseqs_database_warnings(args, mmseqs_database)
+    else:
+        logger.info(f"Search backend: blast")
+        logger.info(f"Database: {args.database}")
+        logger.info(f"BLAST database path: {args.blastdb_path or '(default: $BLASTDB or ~/blastdb)'}")
     logger.info("=" * 60)
-    
+
+    # Write search metadata for provenance tracking
+    _write_backend_search_metadata(args, mmseqs_database)
+
     # Step 1: Read query sequences
     logger.info("\n[Step 1/9] Reading query sequences...")
     try:
@@ -520,7 +678,6 @@ def grouped_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/9] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
-        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
@@ -1010,7 +1167,10 @@ Notes:
         type=str,
         default=None,
         help='MMseqs2 database name (default: same as --database). '
-             'Only used when --search-tool mmseqs2 is specified.'
+             'Only used when --search-tool mmseqs2 is specified. '
+             'The recommended database is one built from the same sequence '
+             'collection as BLAST core_nt (there is no official pre-built '
+             'MMseqs2 core_nt database; users must create their own).'
     )
     blast_parser.add_argument(
         '--mmseqs-db-path',
@@ -1018,7 +1178,21 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db. '
+             'For results comparable with BLAST, this directory should contain '
+             'a database built from the same sequence universe as core_nt.'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-db-source',
+        type=str,
+        default=None,
+        help='Provenance label for the MMseqs2 database, recorded in '
+             'search_metadata.json for reproducibility '
+             "(e.g. 'ncbi_core_nt_derived_mmseqs2'). "
+             'Only used when --search-tool mmseqs2 is specified. '
+             'This label documents where the database originates so that '
+             'downstream interpretation can account for any differences '
+             'from the BLAST core_nt reference corpus.'
     )
     blast_parser.add_argument(
         '--mmseqs-sensitivity',
@@ -1152,7 +1326,10 @@ Notes:
         type=str,
         default=None,
         help='MMseqs2 database name (default: same as --database). '
-             'Only used when --search-tool mmseqs2 is specified.'
+             'Only used when --search-tool mmseqs2 is specified. '
+             'The recommended database is one built from the same sequence '
+             'collection as BLAST core_nt (there is no official pre-built '
+             'MMseqs2 core_nt database; users must create their own).'
     )
     grouped_parser.add_argument(
         '--mmseqs-db-path',
@@ -1160,7 +1337,21 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db. '
+             'For results comparable with BLAST, this directory should contain '
+             'a database built from the same sequence universe as core_nt.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-db-source',
+        type=str,
+        default=None,
+        help='Provenance label for the MMseqs2 database, recorded in '
+             'search_metadata.json for reproducibility '
+             "(e.g. 'ncbi_core_nt_derived_mmseqs2'). "
+             'Only used when --search-tool mmseqs2 is specified. '
+             'This label documents where the database originates so that '
+             'downstream interpretation can account for any differences '
+             'from the BLAST core_nt reference corpus.'
     )
     grouped_parser.add_argument(
         '--mmseqs-sensitivity',
