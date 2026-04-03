@@ -186,10 +186,11 @@ def show_usage_tips():
    eplace relabel blast.txt tree.nwk output.nwk --rank family
 
 6. Integration with Other Commands:
-   # First run BLAST workflow
-   eplace blast query.fasta output_dir --rank genus
+   # First run search workflow
+   eplace search query.fasta output_dir --rank genus
    
    # Then relabel the tree with different rank
+   # Use blast_results.txt (BLAST) or mmseqs_results.txt (MMseqs2)
    eplace relabel output_dir/blast_results.txt \\
           output_dir/query/tree.treefile \\
           output_dir/query/tree_species.treefile \\

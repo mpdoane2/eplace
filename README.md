@@ -38,7 +38,7 @@ Using pip:
 
 ```bash
 # create and activate a mamba environment
-mamba create -yn eplace bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+mamba create -yn eplace bioconda::blast bioconda::mmseqs2 bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
 mamba activate eplace
 
 pip install eplace
@@ -48,7 +48,7 @@ pip install eplace
 
 ```bash
 # create and activate a mamba environment
-mamba create -yn eplace bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+mamba create -yn eplace bioconda::blast bioconda::mmseqs2 bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
 mamba activate eplace
 
 # Clone the repository
@@ -115,26 +115,26 @@ eplace download
 eplace download --force
 ```
 
-### 2. Run Individual BLAST Analysis
+### 2. Run Individual Search Analysis
 
-Run BLAST search and build one phylogenetic tree per query sequence:
+Run sequence search and build one phylogenetic tree per query sequence:
 
 ```bash
 # Basic usage with default parameters
-eplace blast query.fasta output_dir
+eplace search query.fasta output_dir
 
 # With custom parameters
-eplace blast query.fasta output_dir \
+eplace search query.fasta output_dir \
     --rank genus \
     --min-identity 95 \
     --min-coverage 85 \
     --num-threads 4
 
-# Skip alignment and tree building (BLAST and extraction only)
-eplace blast query.fasta output_dir --skip-alignment
+# Skip alignment and tree building (search and extraction only)
+eplace search query.fasta output_dir --skip-alignment
 
 # Show help
-eplace blast --help
+eplace search --help
 ```
 
 ### 3. Run Grouped BLAST Analysis
@@ -225,13 +225,13 @@ eplace download [--force]
 - The download is large (several GB) and may take time
 - MD5 checksums are verified automatically
 
-### eplace blast
+### eplace search
 
-Run BLAST search with individual taxonomy analysis. Creates one phylogenetic tree per query sequence.
+Run sequence search with individual taxonomy analysis. Creates one phylogenetic tree per query sequence.
 
 **Usage:**
 ```bash
-eplace blast QUERY_FASTA OUTPUT_DIR [OPTIONS]
+eplace search QUERY_FASTA OUTPUT_DIR [OPTIONS]
 ```
 
 **Required Arguments:**
@@ -354,7 +354,7 @@ make html
 
 ## Workflow Comparison
 
-### Individual Workflow (`eplace blast`)
+### Individual Workflow (`eplace search`)
 
 The individual workflow processes each query sequence independently:
 - Creates one output directory per query sequence

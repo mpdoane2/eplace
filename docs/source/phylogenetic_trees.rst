@@ -104,7 +104,7 @@ Tree Building in Workflows
 Individual Workflow
 ~~~~~~~~~~~~~~~~~~~
 
-In the individual workflow (``eplace blast``):
+In the individual workflow (``eplace search``):
 
 1. Each query gets its own tree
 2. Tree includes query + representative sequences
@@ -113,7 +113,7 @@ In the individual workflow (``eplace blast``):
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir --tree-label-rank genus
+   eplace search query.fasta output_dir --tree-label-rank genus
 
 Grouped Workflow
 ~~~~~~~~~~~~~~~~

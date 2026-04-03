@@ -27,8 +27,8 @@ Commands Overview
      - Description
    * - ``eplace download``
      - Download NCBI BLAST database
-   * - ``eplace blast``
-     - Run individual BLAST workflow (one tree per query)
+   * - ``eplace search``
+     - Run individual search workflow (one tree per query; BLAST by default, MMseqs2 via ``--search-tool``)
    * - ``eplace grouped``
      - Run grouped BLAST workflow (one tree per taxonomic group)
    * - ``eplace relabel``
@@ -71,7 +71,7 @@ Notes
 * Database will be stored in ``$BLASTDB`` if set, otherwise ``~/blastdb``
 * MD5 checksums are verified automatically
 
-eplace blast
+eplace search
 ------------
 
 Run BLAST search with individual taxonomy analysis. Creates one phylogenetic tree per query sequence.
@@ -81,7 +81,7 @@ Usage
 
 .. code-block:: bash
 
-   eplace blast QUERY_FASTA OUTPUT_DIR [OPTIONS]
+   eplace search QUERY_FASTA OUTPUT_DIR [OPTIONS]
 
 Required Arguments
 ~~~~~~~~~~~~~~~~~~
@@ -170,20 +170,20 @@ Examples
 .. code-block:: bash
 
    # Basic usage with default parameters
-   eplace blast query.fasta output_dir
+   eplace search query.fasta output_dir
 
    # With custom parameters
-   eplace blast query.fasta output_dir \
+   eplace search query.fasta output_dir \
        --rank genus \
        --min-identity 95 \
        --min-coverage 85 \
        --num-threads 4
 
    # Skip alignment and tree building (BLAST only)
-   eplace blast query.fasta output_dir --skip-alignment
+   eplace search query.fasta output_dir --skip-alignment
 
    # Use custom BLAST database location
-   eplace blast query.fasta output_dir --blastdb-path /path/to/blastdb
+   eplace search query.fasta output_dir --blastdb-path /path/to/blastdb
 
 Output Structure
 ~~~~~~~~~~~~~~~~
@@ -511,7 +511,7 @@ The output is a Newick format tree file with sequence IDs replaced by taxonomic 
 Workflow Comparison
 -------------------
 
-Individual Workflow (eplace blast)
+Individual Workflow (eplace search)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Best for:** Analyzing each query sequence in its own phylogenetic context
@@ -548,7 +548,7 @@ Quick BLAST search without trees
 
 .. code-block:: bash
 
-   eplace blast query.fasta results --skip-alignment
+   eplace search query.fasta results --skip-alignment
 
 Relabel existing trees
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -567,7 +567,7 @@ High stringency search
 
 .. code-block:: bash
 
-   eplace blast query.fasta results \
+   eplace search query.fasta results \
        --min-identity 95 \
        --min-coverage 90
 
@@ -576,7 +576,7 @@ Multi-threaded analysis
 
 .. code-block:: bash
 
-   eplace blast query.fasta results --num-threads 8
+   eplace search query.fasta results --num-threads 8
 
 Group related sequences
 ~~~~~~~~~~~~~~~~~~~~~~~
