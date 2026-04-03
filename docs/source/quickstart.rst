@@ -291,7 +291,7 @@ For detailed command-line options, see:
 * :doc:`cli` - Complete CLI reference
 * ``eplace --help`` - General help
 * ``eplace download --help`` - Download command help
-* ``eplace search --help`` - BLAST command help
+* ``eplace search --help`` - Search command help
 * ``eplace grouped --help`` - Grouped command help
 * ``eplace relabel --help`` - Relabel command help
 
