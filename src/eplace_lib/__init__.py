@@ -5,7 +5,13 @@ ePLACE (environmental Phylogenetic Localisation and Clade Estimation)
 provides tools for analyzing environmental DNA sequences.
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("eplace")
+except PackageNotFoundError:
+    __version__ = "unknown"
+
 __author__ = "Rob Edwards"
 
 # Import main classes for convenient access

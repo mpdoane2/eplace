@@ -24,7 +24,7 @@ Common Pipeline Steps
 Individual Workflow
 -------------------
 
-The individual workflow (``eplace blast``) processes each query sequence independently.
+The individual workflow (``eplace search``) processes each query sequence independently.
 
 When to Use
 ~~~~~~~~~~~
@@ -72,17 +72,17 @@ Usage Example
 .. code-block:: bash
 
    # Basic individual workflow
-   eplace blast queries.fasta output_dir
+   eplace search queries.fasta output_dir
 
    # With custom parameters
-   eplace blast queries.fasta output_dir \
+   eplace search queries.fasta output_dir \
        --rank genus \
        --min-identity 95 \
        --min-coverage 85 \
        --num-threads 4
 
-   # BLAST only, no alignment
-   eplace blast queries.fasta output_dir --skip-alignment
+   # Search only, no alignment/tree building
+   eplace search queries.fasta output_dir --skip-alignment
 
 Grouped Workflow
 ----------------
@@ -376,7 +376,7 @@ Use relabel to create multiple tree versions from workflow outputs:
 .. code-block:: bash
 
    # Run workflow once
-   eplace blast queries.fasta output --rank genus
+   eplace search queries.fasta output --rank genus
    
    # Create trees with different label ranks
    cd output/query1
@@ -393,12 +393,12 @@ You can run different analyses on the same BLAST results:
 
 .. code-block:: bash
 
-   # First run: BLAST only
-   eplace blast queries.fasta output1 --skip-alignment
+   # First run: search only (no alignment/tree building)
+   eplace search queries.fasta output1 --skip-alignment
 
    # Analyze at different ranks using same BLAST results
-   eplace blast queries.fasta output2 --rank genus
-   eplace blast queries.fasta output3 --rank species
+   eplace search queries.fasta output2 --rank genus
+   eplace search queries.fasta output3 --rank species
 
 Batch Processing
 ~~~~~~~~~~~~~~~~
@@ -409,7 +409,7 @@ Process multiple query files:
 
    for file in queries/*.fasta; do
        base=$(basename "$file" .fasta)
-       eplace blast "$file" "output_$base" --num-threads 8
+       eplace search "$file" "output_$base" --num-threads 8
    done
 
 Custom Filtering Strategy
@@ -420,17 +420,17 @@ Apply different stringency levels:
 .. code-block:: bash
 
    # High stringency
-   eplace blast queries.fasta output_strict \
+   eplace search queries.fasta output_strict \
        --min-identity 98 \
        --min-coverage 95
 
    # Medium stringency
-   eplace blast queries.fasta output_medium \
+   eplace search queries.fasta output_medium \
        --min-identity 95 \
        --min-coverage 85
 
    # Low stringency
-   eplace blast queries.fasta output_relaxed \
+   eplace search queries.fasta output_relaxed \
        --min-identity 90 \
        --min-coverage 75
 

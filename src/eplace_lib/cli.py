@@ -1033,18 +1033,18 @@ Examples:
   # Download NCBI database
   eplace download
   
-  # Run individual BLAST workflow
-  eplace blast query.fasta output_dir
+  # Run individual search workflow
+  eplace search query.fasta output_dir
   
   # Run grouped BLAST workflow
   eplace grouped query.fasta output_dir --group-rank order
   
-  # Relabel a tree with taxonomic names
+  # Relabel a tree with taxonomic names (use blast_results.txt for BLAST, mmseqs_results.txt for MMseqs2)
   eplace relabel blast_results.txt input.treefile output.treefile --rank genus
   
 For detailed help on each subcommand:
   eplace download --help
-  eplace blast --help
+  eplace search --help
   eplace grouped --help
   eplace relabel --help
 
@@ -1094,94 +1094,95 @@ Notes:
     )
     _add_log_level_argument(download_parser)
     
-    # BLAST subcommand (individual workflow)
-    blast_parser = subparsers.add_parser(
-        'blast',
-        help='Run BLAST search with individual taxonomy analysis',
-        description='Run BLAST search and extract representative sequences per query',
+    # Search subcommand (individual workflow)
+    search_parser = subparsers.add_parser(
+        'search',
+        aliases=['blast'],
+        help='Run sequence search with individual taxonomy analysis',
+        description='Run sequence search and extract representative sequences per query',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Basic usage with default parameters
-  eplace blast query.fasta output_dir
+  eplace search query.fasta output_dir
   
   # Specify taxonomic rank and custom thresholds
-  eplace blast query.fasta output_dir --rank genus --min-identity 95
+  eplace search query.fasta output_dir --rank genus --min-identity 95
   
-  # Skip alignment and tree building (BLAST only)
-  eplace blast query.fasta output_dir --skip-alignment
+  # Search + taxonomy/extraction only (skip alignment and tree building)
+  eplace search query.fasta output_dir --skip-alignment
   
   # Use custom BLAST database location
-  eplace blast query.fasta output_dir --blastdb-path /path/to/blastdb
+  eplace search query.fasta output_dir --blastdb-path /path/to/blastdb
 
 Notes:
   - Creates one phylogenetic tree per query sequence
   - Default filtering: 90% identity, 80% query coverage
-  - Requires BLAST+ tools and optionally MAFFT and IQTree
+  - Requires BLAST+ or MMseqs2 tools and optionally MAFFT and IQTree
         """
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         'query_fasta',
         type=Path,
         help='Path to query FASTA file'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         'output_dir',
         type=Path,
         help='Output directory for results'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--rank',
         type=str,
         default='genus',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
         help='Taxonomic rank for representative selection (default: genus)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--tree-label-rank',
         type=str,
         default='genus',
         choices=['phylum', 'class', 'order', 'family', 'genus', 'species'],
         help='Taxonomic rank for tree labeling (default: genus)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--min-identity',
         type=float,
         default=90.0,
         help='Minimum percent identity for BLAST hits (default: 90.0)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--min-coverage',
         type=float,
         default=80.0,
         help='Minimum query coverage percentage (default: 80.0)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--database',
         type=str,
         default='core_nt',
         help='BLAST database name (default: core_nt)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--blastdb-path',
         type=Path,
         default=None,
         help='Path to BLAST database directory'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--num-threads',
         type=int,
         default=1,
         help='Number of threads for search and alignment (default: 1)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--search-tool',
         type=str,
         default='blast',
         choices=['blast', 'mmseqs2'],
         help='Sequence search tool to use (default: blast)'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--blast-db-source',
         type=str,
         default=None,
@@ -1193,7 +1194,7 @@ Notes:
              'Use this flag when --database points to a database other than '
              'the standard NCBI core_nt to document the database origin.'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--mmseqs-database',
         type=str,
         default=None,
@@ -1203,7 +1204,7 @@ Notes:
              'collection as BLAST core_nt (there is no official pre-built '
              'MMseqs2 core_nt database; users must create their own).'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--mmseqs-db-path',
         type=Path,
         default=None,
@@ -1213,7 +1214,7 @@ Notes:
              'For results comparable with BLAST, this directory should contain '
              'a database built from the same sequence universe as core_nt.'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--mmseqs-db-source',
         type=str,
         default=None,
@@ -1225,30 +1226,30 @@ Notes:
              'downstream interpretation can account for any differences '
              'from the BLAST core_nt reference corpus.'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--mmseqs-sensitivity',
         type=float,
         default=5.7,
         help='MMseqs2 sensitivity setting, 1–7.5 (default: 5.7). '
              'Only used when --search-tool mmseqs2 is specified.'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--overwrite-existing-blast',
         action='store_true',
         help='Overwrite existing search results'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--skip-alignment',
         action='store_true',
         help='Skip alignment and tree building steps'
     )
-    blast_parser.add_argument(
+    search_parser.add_argument(
         '--output-classification',
         type=Path,
         default=None,
         help='Path to output classification TSV file'
     )
-    _add_log_level_argument(blast_parser)
+    _add_log_level_argument(search_parser)
     
     # Grouped subcommand
     grouped_parser = subparsers.add_parser(
@@ -1496,7 +1497,7 @@ Notes:
     # Route to appropriate command handler
     if args.command == 'download':
         return download_command(args)
-    elif args.command == 'blast':
+    elif args.command in ('search', 'blast'):
         return blast_command(args)
     elif args.command == 'grouped':
         return grouped_command(args)

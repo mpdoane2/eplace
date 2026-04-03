@@ -81,7 +81,7 @@ Alignment in Workflows
 Individual Workflow
 ~~~~~~~~~~~~~~~~~~~
 
-In the individual workflow (``eplace blast``):
+In the individual workflow (``eplace search``):
 
 1. Query sequence is combined with its representatives
 2. Combined FASTA is trimmed to aligned regions
@@ -90,7 +90,7 @@ In the individual workflow (``eplace blast``):
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir --num-threads 4
+   eplace search query.fasta output_dir --num-threads 4
 
 Grouped Workflow
 ~~~~~~~~~~~~~~~~
@@ -113,7 +113,7 @@ If you only need BLAST results without alignment:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir --skip-alignment
+   eplace search query.fasta output_dir --skip-alignment
 
 This will:
 

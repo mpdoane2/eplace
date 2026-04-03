@@ -17,4 +17,4 @@ conda activate eplace
 
 if [[ $# != 2 ]]; then echo "$0  <fasta file> <output dir> " >&2; exit 1; fi
 
-eplace blast --output-classification classifications.tsv --rank genus --num-threads 32 $1 $2 
+eplace search --output-classification classifications.tsv --rank genus --num-threads 32 $1 $2 
