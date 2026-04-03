@@ -116,7 +116,14 @@ class TaxonomyExtractor:
         reported_hits = set()
         for hit in hits:
             if not hit.subject_taxonomy:
-                logger.info(f"Skipping the taxonomy for {hit.query_id} as no subject taxonomy")
+                # No taxonomy available (e.g. MMseqs2 database without taxonomy).
+                # Fall back to grouping by subject_id so the hit still contributes
+                # a representative rather than being silently dropped.
+                logger.info(
+                    f"No taxonomy for hit {hit.subject_id} (query {hit.query_id}); "
+                    f"using subject_id as fallback group key"
+                )
+                rank_groups[hit.subject_id].append(hit)
                 continue
             if rank not in hit.subject_taxonomy:
                 logger.info(
@@ -427,7 +434,12 @@ def process_blast_results_for_taxonomy(
         
         # Update the preferred representatives with newly selected ones
         for rep in representatives:
-            if isinstance(rep.subject_taxonomy[rank], tuple) and rep.subject_taxonomy[rank][1] not in preferred_representatives:
+            if (
+                rep.subject_taxonomy
+                and rank in rep.subject_taxonomy
+                and isinstance(rep.subject_taxonomy[rank], tuple)
+                and rep.subject_taxonomy[rank][1] not in preferred_representatives
+            ):
                 preferred_representatives[rep.subject_taxonomy[rank][1]] = rep.subject_id
                 logger.info(f"Recording {rep.subject_id} as representative for rank {rep.subject_taxonomy[rank][1]}")
         
