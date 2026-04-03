@@ -91,33 +91,47 @@ class BlastHit:
             The accession number extracted from subject_id, or the full subject_id
             if no standard format is detected
         """
-        # If the ID contains pipes, it's in a structured format
-        if '|' in self.subject_id:
-            parts = self.subject_id.split('|')
-            
-            # Handle gnl|database|identifier format separately
-            if len(parts) >= 3 and parts[0] == 'gnl':
-                return parts[2]
-            
-            # Look for standard database identifiers
-            # Common formats: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|
-            db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
-            for i, part in enumerate(parts):
-                if part in db_identifiers:
-                    # Next part should be the accession
-                    if i + 1 < len(parts) and parts[i + 1]:
-                        return parts[i + 1]
-            
-            # If no known database identifier found, try to return a reasonable fallback
-            # Filter out empty strings and known non-accession prefixes
-            known_prefixes = ['gi']
-            non_empty = [p for p in parts if p and p not in known_prefixes]
-            if non_empty:
-                # Return the last non-empty part (most likely to be the accession)
-                return non_empty[-1]
-        
-        # If no pipes or couldn't parse, assume it's already an accession
-        return self.subject_id
+        return _extract_accession_from_pipe_id(self.subject_id)
+
+
+def _extract_accession_from_pipe_id(seq_id: str) -> str:
+    """
+    Extract the accession number from a pipe-delimited NCBI-style sequence ID.
+
+    Handles formats such as:
+    - gi|2273658778|gb|MZ387488.1| -> MZ387488.1
+    - ref|NZ_CP123456.1|           -> NZ_CP123456.1
+    - gb|MZ387488.1|               -> MZ387488.1
+    - gnl|BL_ORD_ID|12345          -> 12345
+    - MZ387488.1                   -> MZ387488.1 (returned unchanged)
+
+    Args:
+        seq_id: Sequence identifier, which may or may not be pipe-delimited.
+
+    Returns:
+        Extracted accession, or *seq_id* itself if no pipe-delimited structure is recognised.
+    """
+    if '|' in seq_id:
+        parts = seq_id.split('|')
+
+        # gnl|database|identifier format
+        if len(parts) >= 3 and parts[0] == 'gnl':
+            return parts[2]
+
+        # Known database prefixes: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|, etc.
+        db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
+        for i, part in enumerate(parts):
+            if part in db_identifiers:
+                if i + 1 < len(parts) and parts[i + 1]:
+                    return parts[i + 1]
+
+        # Fallback: last non-empty, non-'gi' part
+        non_empty = [p for p in parts if p and p != 'gi']
+        if non_empty:
+            return non_empty[-1]
+
+    return seq_id
+
 
 def normalize_sequence_id(seq_id: str) -> str:
     """
@@ -130,8 +144,8 @@ def normalize_sequence_id(seq_id: str) -> str:
     1. Strip a leading '>' (FASTA header prefix).
     2. Take only the first whitespace-delimited token.
     3. Remove MAFFT reverse-complement markers: a leading '_R_' prefix or a trailing '_R_' suffix.
-    4. If the token contains pipes ('|'), extract the accession using the same rules as
-       BlastHit.get_accession() (gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.).
+    4. If the token contains pipes ('|'), extract the accession via _extract_accession_from_pipe_id()
+       (gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.).
     5. Otherwise return the token unchanged.
 
     Args:
@@ -157,27 +171,7 @@ def normalize_sequence_id(seq_id: str) -> str:
         token = token[:-3]
 
     # Step 4: parse pipe-delimited NCBI-style identifiers
-    if '|' in token:
-        parts = token.split('|')
-
-        # gnl|database|identifier
-        if len(parts) >= 3 and parts[0] == 'gnl':
-            return parts[2]
-
-        # Known database prefixes: gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.
-        db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
-        for i, part in enumerate(parts):
-            if part in db_identifiers:
-                if i + 1 < len(parts) and parts[i + 1]:
-                    return parts[i + 1]
-
-        # Fallback: last non-empty, non-'gi' part
-        known_prefixes = {'gi'}
-        non_empty = [p for p in parts if p and p not in known_prefixes]
-        if non_empty:
-            return non_empty[-1]
-
-    return token
+    return _extract_accession_from_pipe_id(token)
 
 
 class FastaReader:
