@@ -135,9 +135,10 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
 def _write_backend_search_metadata(args, mmseqs_database: str) -> None:
     """Resolve backend paths and write provenance metadata to the output directory.
 
-    For BLAST the ``database_source`` is always ``ncbi_core_nt``.  For MMseqs2
-    the ``database_source`` is the value of ``--mmseqs-db-source`` (empty
-    string if not provided).
+    For BLAST the ``database_source`` is taken from ``--blast-db-source`` when
+    provided; if not provided it defaults to the value of ``--database`` (e.g.
+    ``core_nt``).  For MMseqs2 the ``database_source`` is the value of
+    ``--mmseqs-db-source`` (empty string if not provided).
 
     Args:
         args: Parsed argument namespace from argparse.
@@ -161,7 +162,7 @@ def _write_backend_search_metadata(args, mmseqs_database: str) -> None:
             search_backend="blast",
             database_name=args.database,
             database_path=str(resolved_path),
-            database_source="ncbi_core_nt"
+            database_source=args.blast_db_source or args.database
         )
 
 
@@ -230,6 +231,7 @@ def blast_command(args):
         logger.info(f"Search backend: blast")
         logger.info(f"Database: {args.database}")
         logger.info(f"BLAST database path: {args.blastdb_path or '(default: $BLASTDB or ~/blastdb)'}")
+        logger.info(f"BLAST database source: {args.blast_db_source or args.database}")
     logger.info("=" * 60)
 
     # Write search metadata for provenance tracking
@@ -658,6 +660,7 @@ def grouped_command(args):
         logger.info(f"Search backend: blast")
         logger.info(f"Database: {args.database}")
         logger.info(f"BLAST database path: {args.blastdb_path or '(default: $BLASTDB or ~/blastdb)'}")
+        logger.info(f"BLAST database source: {args.blast_db_source or args.database}")
     logger.info("=" * 60)
 
     # Write search metadata for provenance tracking
@@ -1163,6 +1166,18 @@ Notes:
         help='Sequence search tool to use (default: blast)'
     )
     blast_parser.add_argument(
+        '--blast-db-source',
+        type=str,
+        default=None,
+        help='Provenance label for the BLAST database, recorded in '
+             'search_metadata.json for reproducibility '
+             "(e.g. 'ncbi_core_nt' for the default NCBI core_nt, or a "
+             "custom label when using a non-standard BLAST database). "
+             'If not provided, defaults to the value of --database. '
+             'Use this flag when --database points to a database other than '
+             'the standard NCBI core_nt to document the database origin.'
+    )
+    blast_parser.add_argument(
         '--mmseqs-database',
         type=str,
         default=None,
@@ -1320,6 +1335,18 @@ Notes:
         default='blast',
         choices=['blast', 'mmseqs2'],
         help='Sequence search tool to use (default: blast)'
+    )
+    grouped_parser.add_argument(
+        '--blast-db-source',
+        type=str,
+        default=None,
+        help='Provenance label for the BLAST database, recorded in '
+             'search_metadata.json for reproducibility '
+             "(e.g. 'ncbi_core_nt' for the default NCBI core_nt, or a "
+             "custom label when using a non-standard BLAST database). "
+             'If not provided, defaults to the value of --database. '
+             'Use this flag when --database points to a database other than '
+             'the standard NCBI core_nt to document the database origin.'
     )
     grouped_parser.add_argument(
         '--mmseqs-database',

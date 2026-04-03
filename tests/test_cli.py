@@ -281,6 +281,35 @@ def test_cli_has_mmseqs_db_source_argument():
     )
 
 
+def test_cli_has_blast_db_source_argument():
+    """Test that blast and grouped parsers have the --blast-db-source argument."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    db_source_parsers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == 'add_argument'):
+            continue
+        has_db_source = any(
+            isinstance(a, ast.Constant) and a.value == '--blast-db-source'
+            for a in node.args
+        )
+        if has_db_source and isinstance(func.value, ast.Name):
+            db_source_parsers.add(func.value.id)
+
+    expected = {'blast_parser', 'grouped_parser'}
+    missing = expected - db_source_parsers
+    assert not missing, (
+        f"--blast-db-source argument missing from: {sorted(missing)}"
+    )
+
+
 def test_cli_has_write_search_metadata_function():
     """Test that the CLI module defines the _write_search_metadata helper."""
     cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
@@ -393,6 +422,29 @@ def test_cli_write_search_metadata_mmseqs2():
         assert data['database_source'] == 'ncbi_core_nt_derived_mmseqs2'
 
 
+def test_cli_write_search_metadata_blast_custom_source():
+    """Test that BLAST metadata uses blast_db_source when provided, else database name."""
+    import json
+    import tempfile
+
+    module = _load_cli_module_for_testing()
+    write_fn = module._write_search_metadata
+
+    # When blast_db_source is explicitly provided, it is recorded as-is.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+        write_fn(
+            output_dir=output_dir,
+            search_backend='blast',
+            database_name='custom_nt',
+            database_path='/custom/blastdb',
+            database_source='custom_nt'
+        )
+        data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert data['database_source'] == 'custom_nt'
+        assert data['database_name'] == 'custom_nt'
+
+
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
@@ -408,9 +460,11 @@ if __name__ == '__main__':
         test_cli_has_log_level_argument,
         test_cli_log_level_in_all_subparsers,
         test_cli_has_mmseqs_db_source_argument,
+        test_cli_has_blast_db_source_argument,
         test_cli_has_write_search_metadata_function,
         test_cli_write_search_metadata_writes_json,
         test_cli_write_search_metadata_mmseqs2,
+        test_cli_write_search_metadata_blast_custom_source,
     ]
     
     passed = 0
