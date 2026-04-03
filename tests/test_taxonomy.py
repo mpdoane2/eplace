@@ -149,7 +149,79 @@ class TestTaxonomyExtractor:
         )
         
         assert len(representatives) == 0
-    
+
+    def test_select_representatives_no_taxonomy_fallback(self):
+        """Hits with no subject_taxonomy (e.g. MMseqs2 without tax DB) are
+        still returned as representatives, grouped by subject_id."""
+        extractor = self.taxonomy_extractor
+
+        hits = [
+            BlastHit(
+                query_id='query1', subject_id='subjectA',
+                percent_identity=95.0,
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1,
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=1e-50,
+                bit_score=900,
+                query_coverage=100,
+                subject_taxid="0",
+                subject_taxids="0",
+                subject_taxonomy=None
+            ),
+            BlastHit(
+                query_id='query1', subject_id='subjectA',
+                percent_identity=90.0,
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1,
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=1e-40,
+                bit_score=800,
+                query_coverage=100,
+                subject_taxid="0",
+                subject_taxids="0",
+                subject_taxonomy=None
+            ),
+            BlastHit(
+                query_id='query1', subject_id='subjectB',
+                percent_identity=85.0,
+                alignment_length=500,
+                query_length=500,
+                subject_length=1000,
+                query_start=1,
+                query_end=500,
+                subject_start=1,
+                subject_end=500,
+                evalue=1e-30,
+                bit_score=700,
+                query_coverage=100,
+                subject_taxid="0",
+                subject_taxids="0",
+                subject_taxonomy=None
+            ),
+        ]
+
+        representatives = extractor.select_representatives_by_rank(
+            hits=hits,
+            rank='genus'
+        )
+
+        # Two unique subject_ids → two groups → two representatives
+        assert len(representatives) == 2
+        rep_ids = {r.subject_id for r in representatives}
+        assert rep_ids == {'subjectA', 'subjectB'}
+        # Best hit per group (highest bit_score) should be selected
+        subjectA_rep = next(r for r in representatives if r.subject_id == 'subjectA')
+        assert subjectA_rep.bit_score == 900
+
     def test_select_representatives_with_preferred(self):
         """Test that preferred representatives are reused when available."""
         extractor = self.taxonomy_extractor

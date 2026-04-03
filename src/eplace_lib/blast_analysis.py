@@ -442,6 +442,7 @@ def run_blast_search(
         database: Name of BLAST database (default: "core_nt")
         blastdb_path: Path to BLAST database directory
         num_threads: Number of threads to use
+        skip_existing: Skip search if output file already exists (default: True)
         
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])
@@ -478,4 +479,350 @@ def run_blast_search(
         
     except Exception as e:
         logger.error(f"Error processing BLAST results: {e}")
+        return False, []
+
+
+class MMseqs2Runner:
+    """
+    Class for running MMseqs2 searches and parsing results.
+
+    MMseqs2 (Many-against-Many sequence searching) is an alternative to BLAST
+    for sequence similarity searching, offering improved speed and sensitivity.
+    Results are parsed into BlastHit objects for compatibility with the rest of
+    the ePLACE pipeline.
+
+    The target database can be either a pre-built MMseqs2 database (created with
+    ``mmseqs createdb``) or a FASTA file that MMseqs2 indexes automatically.
+    Taxonomy fields (taxid) are populated only when the database was built with
+    taxonomy information (``mmseqs createtaxdb``); otherwise they default to "0".
+    """
+
+    def __init__(self, db_path: Optional[Path] = None):
+        """
+        Initialize the MMseqs2Runner.
+
+        Args:
+            db_path: Path to the MMseqs2 database directory. If None the
+                ``MMSEQS2DB`` environment variable is used; if that is also
+                unset the directory ``~/mmseqs2db`` is used.
+        """
+        self.db_path = db_path
+        if self.db_path is None:
+            mmseqs_env = os.environ.get('MMSEQS2DB')
+            if mmseqs_env:
+                self.db_path = Path(mmseqs_env)
+            else:
+                self.db_path = Path.home() / "mmseqs2db"
+
+    def check_mmseqs_available(self) -> bool:
+        """
+        Check if mmseqs is available in the system PATH.
+
+        Returns:
+            True if mmseqs is available, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ['mmseqs', 'version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
+
+    def run_easy_search(
+        self,
+        query_fasta: Path,
+        output_file: Path,
+        database: str = "core_nt",
+        num_threads: int = 1,
+        max_target_seqs: int = 100,
+        evalue: float = 1e-5,
+        sensitivity: float = 5.7,
+        tmp_dir: Optional[Path] = None
+    ) -> bool:
+        """
+        Run an MMseqs2 easy-search.
+
+        The output is written in a tab-separated format with the following
+        columns (in order):
+        query, target, pident, alnlen, qlen, tlen, qstart, qend, tstart, tend,
+        evalue, bits, taxid, taxlineage
+
+        Args:
+            query_fasta: Path to query FASTA file
+            output_file: Path to output file
+            database: Name of MMseqs2 database inside ``db_path`` (default: "core_nt")
+            num_threads: Number of threads to use
+            max_target_seqs: Maximum number of target sequences to report
+            evalue: E-value threshold
+            sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
+            tmp_dir: Temporary directory for MMseqs2 intermediate files.
+                Defaults to a ``mmseqs_tmp`` subdirectory next to ``output_file``.
+
+        Returns:
+            True if MMseqs2 ran successfully, False otherwise
+
+        Raises:
+            FileNotFoundError: If query file doesn't exist
+            RuntimeError: If mmseqs is not available
+        """
+        if not query_fasta.exists():
+            raise FileNotFoundError(f"Query FASTA file not found: {query_fasta}")
+
+        if not self.check_mmseqs_available():
+            raise RuntimeError("mmseqs is not available. Please install MMseqs2.")
+
+        # Build database path
+        db_path = self.db_path / database
+
+        # Set up tmp directory
+        if tmp_dir is None:
+            tmp_dir = output_file.parent / "mmseqs_tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Custom output format: matches the field order used in parse_mmseqs_results
+        format_output = (
+            "query,target,pident,alnlen,qlen,tlen,"
+            "qstart,qend,tstart,tend,evalue,bits,taxid,taxlineage"
+        )
+
+        cmd = [
+            'mmseqs', 'easy-search',
+            str(query_fasta),
+            str(db_path),
+            str(output_file),
+            str(tmp_dir),
+            '--format-output', format_output,
+            '--threads', str(num_threads),
+            '--max-seqs', str(max_target_seqs),
+            '-e', str(evalue),
+            '-s', str(sensitivity)
+        ]
+
+        logger.info(f"Running MMseqs2 search: {' '.join(cmd)}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3600  # 1 hour timeout
+            )
+
+            if result.returncode != 0:
+                logger.error(f"MMseqs2 failed with error: {result.stderr}")
+                return False
+
+            logger.info(f"MMseqs2 search completed successfully. Output: {output_file}")
+            return True
+
+        except subprocess.TimeoutExpired:
+            logger.error("MMseqs2 search timed out")
+            return False
+        except Exception as e:
+            logger.error(f"Error running MMseqs2: {e}")
+            return False
+
+    def parse_mmseqs_results(
+        self,
+        mmseqs_output: Path,
+        query_lengths: Optional[dict[str, int]] = None
+    ) -> list[BlastHit]:
+        """
+        Parse MMseqs2 tabular output into BlastHit objects.
+
+        Expects output generated with ``--format-output`` set to:
+        ``query,target,pident,alnlen,qlen,tlen,qstart,qend,tstart,tend,evalue,bits,taxid,taxlineage``
+
+        The ``taxid`` and ``taxlineage`` columns are optional; if absent or
+        set to "N/A" / "0", ``subject_taxid`` will be stored as "0".
+
+        Args:
+            mmseqs_output: Path to MMseqs2 output file
+            query_lengths: Unused; kept for API compatibility with
+                BlastRunner.parse_blast_results.
+
+        Returns:
+            list of BlastHit objects
+
+        Raises:
+            FileNotFoundError: If the output file doesn't exist
+            ValueError: If the output is malformed
+        """
+        if not mmseqs_output.exists():
+            raise FileNotFoundError(f"MMseqs2 output file not found: {mmseqs_output}")
+
+        hits = []
+
+        with open(mmseqs_output, 'r') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                fields = line.split('\t')
+                if len(fields) < 12:
+                    raise ValueError(
+                        f"Invalid MMseqs2 output format at line {line_num}: "
+                        f"expected at least 12 fields, got {len(fields)}"
+                    )
+
+                try:
+                    query_id = fields[0]
+                    subject_id = fields[1]
+                    percent_identity = float(fields[2])
+                    alignment_length = int(fields[3])
+                    query_length = int(fields[4])
+                    subject_length = int(fields[5])
+                    query_start = int(fields[6])
+                    query_end = int(fields[7])
+                    subject_start = int(fields[8])
+                    subject_end = int(fields[9])
+                    evalue = float(fields[10])
+                    bit_score = float(fields[11])
+
+                    # taxid field (may be absent or "N/A" when database has no taxonomy)
+                    taxid = "0"
+                    if len(fields) > 12 and fields[12] not in ("", "N/A", "0"):
+                        taxid = fields[12]
+
+                    # Calculate query coverage
+                    query_coverage = (abs(query_end - query_start) + 1) / query_length * 100
+
+                    hit = BlastHit(
+                        query_id=query_id,
+                        subject_id=subject_id,
+                        percent_identity=percent_identity,
+                        alignment_length=alignment_length,
+                        query_length=query_length,
+                        subject_length=subject_length,
+                        query_start=query_start,
+                        query_end=query_end,
+                        subject_start=subject_start,
+                        subject_end=subject_end,
+                        evalue=evalue,
+                        bit_score=bit_score,
+                        query_coverage=query_coverage,
+                        subject_taxid=taxid,
+                        subject_taxids=taxid
+                    )
+                    hits.append(hit)
+
+                except (ValueError, IndexError) as e:
+                    raise ValueError(
+                        f"Error parsing MMseqs2 output at line {line_num}: {e}"
+                    )
+
+        return hits
+
+    def filter_hits(
+        self,
+        hits: list[BlastHit],
+        min_identity: float = 90.0,
+        min_coverage: float = 80.0,
+        min_alignment_length: Optional[int] = None
+    ) -> list[BlastHit]:
+        """
+        Filter MMseqs2 hits based on identity and coverage thresholds.
+
+        Args:
+            hits: list of BlastHit objects
+            min_identity: Minimum percent identity (default: 90.0)
+            min_coverage: Minimum query coverage percentage (default: 80.0)
+            min_alignment_length: Minimum alignment length (optional)
+
+        Returns:
+            Filtered list of BlastHit objects
+        """
+        filtered_hits = []
+
+        for hit in hits:
+            if hit.percent_identity < min_identity:
+                continue
+            if hit.query_coverage < min_coverage:
+                continue
+            if min_alignment_length and hit.alignment_length < min_alignment_length:
+                continue
+            filtered_hits.append(hit)
+
+        logger.info(
+            f"Filtered {len(hits)} hits to {len(filtered_hits)} hits "
+            f"(min_identity={min_identity}%, min_coverage={min_coverage}%)"
+        )
+
+        return filtered_hits
+
+
+def run_mmseqs_search(
+    query_fasta: Path,
+    output_file: Path,
+    min_identity: float = 90.0,
+    min_coverage: float = 80.0,
+    database: str = "core_nt",
+    db_path: Optional[Path] = None,
+    num_threads: int = 1,
+    sensitivity: float = 5.7,
+    skip_existing: bool = True
+) -> tuple[bool, list[BlastHit]]:
+    """
+    Convenience function to run an MMseqs2 search and return filtered hits.
+
+    Args:
+        query_fasta: Path to query FASTA file
+        output_file: Path to output file
+        min_identity: Minimum percent identity (default: 90.0)
+        min_coverage: Minimum query coverage percentage (default: 80.0)
+        database: Name of MMseqs2 database inside ``db_path`` (default: "core_nt")
+        db_path: Path to the MMseqs2 database directory
+        num_threads: Number of threads to use
+        sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
+        skip_existing: Skip search if output file already exists (default: True)
+
+    Returns:
+        Tuple of (success: bool, filtered_hits: list[BlastHit])
+
+    Raises:
+        ValueError: If sensitivity is outside the valid range (1–7.5)
+    """
+    if not 1.0 <= sensitivity <= 7.5:
+        raise ValueError(
+            f"MMseqs2 sensitivity must be between 1.0 and 7.5, got {sensitivity}"
+        )
+    runner = MMseqs2Runner(db_path)
+
+    if os.path.exists(output_file) and skip_existing:
+        logger.info(
+            f"The MMseqs2 output file {output_file} already exists. "
+            "Skipping and using these results"
+        )
+    else:
+        success = runner.run_easy_search(
+            query_fasta=query_fasta,
+            output_file=output_file,
+            database=database,
+            num_threads=num_threads,
+            sensitivity=sensitivity
+        )
+
+        if not success:
+            return False, []
+
+    # Parse results
+    try:
+        hits = runner.parse_mmseqs_results(output_file)
+
+        # Filter results
+        filtered_hits = runner.filter_hits(
+            hits,
+            min_identity=min_identity,
+            min_coverage=min_coverage
+        )
+
+        return True, filtered_hits
+
+    except Exception as e:
+        logger.error(f"Error processing MMseqs2 results: {e}")
         return False, []

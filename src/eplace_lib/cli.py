@@ -13,7 +13,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from .ncbi_download import setup_ncbi_database
-from .blast_analysis import run_blast_search, FastaReader
+from .blast_analysis import run_blast_search, run_mmseqs_search, FastaReader
 from .taxonomy import (
     process_blast_results_for_taxonomy,
     rewrite_blast_hits,
@@ -78,10 +78,11 @@ def blast_command(args):
     skip_existing = not args.overwrite_existing_blast
 
     logger.info("=" * 60)
-    logger.info("ePLACE BLAST Workflow")
+    logger.info("ePLACE Search Workflow")
     logger.info("=" * 60)
     logger.info(f"Query FASTA: {args.query_fasta}")
     logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Search tool: {args.search_tool}")
     logger.info(f"Taxonomic rank: {args.rank}")
     logger.info(f"Taxonomic rank for tree labeling: {args.tree_label_rank}")
     logger.info(f"Classification output file: {args.output_classification}")
@@ -102,35 +103,62 @@ def blast_command(args):
         logger.exception(f"Error reading FASTA file")
         return 1
     
-    # Step 2: Run BLAST search
-    logger.info("\n[Step 2/5] Running BLAST search...")
-    blast_output = args.output_dir / "blast_results.txt"
-    
-    try:
-        success, filtered_hits = run_blast_search(
-            query_fasta=args.query_fasta,
-            output_file=blast_output,
-            min_identity=args.min_identity,
-            min_coverage=args.min_coverage,
-            database=args.database,
-            blastdb_path=args.blastdb_path,
-            num_threads=args.num_threads,
-            skip_existing=skip_existing
-        )
-        
-        if not success:
-            logger.error("BLAST search failed")
+    # Step 2: Run sequence search
+    if args.search_tool == 'mmseqs2':
+        logger.info("\n[Step 2/5] Running MMseqs2 search...")
+        search_output = args.output_dir / "mmseqs_results.txt"
+        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
+        try:
+            success, filtered_hits = run_mmseqs_search(
+                query_fasta=args.query_fasta,
+                output_file=search_output,
+                min_identity=args.min_identity,
+                min_coverage=args.min_coverage,
+                database=mmseqs_database,
+                db_path=args.mmseqs_db_path,
+                num_threads=args.num_threads,
+                sensitivity=args.mmseqs_sensitivity,
+                skip_existing=skip_existing
+            )
+
+            if not success:
+                logger.error("MMseqs2 search failed")
+                return 1
+
+            logger.info(f"MMseqs2 search completed successfully")
+            logger.info(f"Found {len(filtered_hits)} hits after filtering")
+
+        except Exception:
+            logger.exception(f"Error during MMseqs2 search")
             return 1
-        
-        logger.info(f"BLAST search completed successfully")
-        logger.info(f"Found {len(filtered_hits)} hits after filtering")
-        
-    except Exception:
-        logger.exception(f"Error during BLAST search")
-        return 1
+    else:
+        logger.info("\n[Step 2/5] Running BLAST search...")
+        search_output = args.output_dir / "blast_results.txt"
+        try:
+            success, filtered_hits = run_blast_search(
+                query_fasta=args.query_fasta,
+                output_file=search_output,
+                min_identity=args.min_identity,
+                min_coverage=args.min_coverage,
+                database=args.database,
+                blastdb_path=args.blastdb_path,
+                num_threads=args.num_threads,
+                skip_existing=skip_existing
+            )
+
+            if not success:
+                logger.error("BLAST search failed")
+                return 1
+
+            logger.info(f"BLAST search completed successfully")
+            logger.info(f"Found {len(filtered_hits)} hits after filtering")
+
+        except Exception:
+            logger.exception(f"Error during BLAST search")
+            return 1
     
     # Step 3: Group hits by query and display summary
-    logger.info("\n[Step 3/5] Analyzing BLAST results...")
+    logger.info("\n[Step 3/5] Analyzing search results...")
     hits_by_query = defaultdict(int)
     for hit in filtered_hits:
         hits_by_query[hit.query_id] += 1
@@ -463,10 +491,11 @@ def grouped_command(args):
     skip_existing = not args.overwrite_existing_blast
 
     logger.info("=" * 60)
-    logger.info("ePLACE Grouped BLAST Workflow")
+    logger.info("ePLACE Grouped Search Workflow")
     logger.info("=" * 60)
     logger.info(f"Query FASTA: {args.query_fasta}")
     logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Search tool: {args.search_tool}")
     logger.info(f"Representative rank: {args.rank}")
     logger.info(f"Grouping rank: {args.group_rank}")
     logger.info(f"Tree labeling rank: {args.tree_label_rank}")
@@ -488,32 +517,59 @@ def grouped_command(args):
         logger.exception(f"Error reading FASTA file")
         return 1
     
-    # Step 2: Run BLAST search
-    logger.info("\n[Step 2/9] Running BLAST search...")
-    blast_output = args.output_dir / "blast_results.txt"
-    
-    try:
-        success, filtered_hits = run_blast_search(
-            query_fasta=args.query_fasta,
-            output_file=blast_output,
-            min_identity=args.min_identity,
-            min_coverage=args.min_coverage,
-            database=args.database,
-            blastdb_path=args.blastdb_path,
-            num_threads=args.num_threads,
-            skip_existing=skip_existing
-        )
-        
-        if not success:
-            logger.error("BLAST search failed")
+    # Step 2: Run sequence search
+    if args.search_tool == 'mmseqs2':
+        logger.info("\n[Step 2/9] Running MMseqs2 search...")
+        search_output = args.output_dir / "mmseqs_results.txt"
+        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
+        try:
+            success, filtered_hits = run_mmseqs_search(
+                query_fasta=args.query_fasta,
+                output_file=search_output,
+                min_identity=args.min_identity,
+                min_coverage=args.min_coverage,
+                database=mmseqs_database,
+                db_path=args.mmseqs_db_path,
+                num_threads=args.num_threads,
+                sensitivity=args.mmseqs_sensitivity,
+                skip_existing=skip_existing
+            )
+
+            if not success:
+                logger.error("MMseqs2 search failed")
+                return 1
+
+            logger.info(f"MMseqs2 search completed successfully")
+            logger.info(f"Found {len(filtered_hits)} hits after filtering")
+
+        except Exception:
+            logger.exception(f"Error during MMseqs2 search")
             return 1
-        
-        logger.info(f"BLAST search completed successfully")
-        logger.info(f"Found {len(filtered_hits)} hits after filtering")
-        
-    except Exception:
-        logger.exception(f"Error during BLAST search")
-        return 1
+    else:
+        logger.info("\n[Step 2/9] Running BLAST search...")
+        search_output = args.output_dir / "blast_results.txt"
+        try:
+            success, filtered_hits = run_blast_search(
+                query_fasta=args.query_fasta,
+                output_file=search_output,
+                min_identity=args.min_identity,
+                min_coverage=args.min_coverage,
+                database=args.database,
+                blastdb_path=args.blastdb_path,
+                num_threads=args.num_threads,
+                skip_existing=skip_existing
+            )
+
+            if not success:
+                logger.error("BLAST search failed")
+                return 1
+
+            logger.info(f"BLAST search completed successfully")
+            logger.info(f"Found {len(filtered_hits)} hits after filtering")
+
+        except Exception:
+            logger.exception(f"Error during BLAST search")
+            return 1
     
     # Step 3: Process taxonomy information
     logger.info(f"\n[Step 3/9] Processing taxonomy information (rank: {args.rank})...")
@@ -920,12 +976,41 @@ Notes:
         '--num-threads',
         type=int,
         default=1,
-        help='Number of threads for BLAST and alignment (default: 1)'
+        help='Number of threads for search and alignment (default: 1)'
+    )
+    blast_parser.add_argument(
+        '--search-tool',
+        type=str,
+        default='blast',
+        choices=['blast', 'mmseqs2'],
+        help='Sequence search tool to use (default: blast)'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-database',
+        type=str,
+        default=None,
+        help='MMseqs2 database name (default: same as --database). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-db-path',
+        type=Path,
+        default=None,
+        help='Path to the MMseqs2 database directory. '
+             'Only used when --search-tool mmseqs2 is specified. '
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-sensitivity',
+        type=float,
+        default=5.7,
+        help='MMseqs2 sensitivity setting, 1–7.5 (default: 5.7). '
+             'Only used when --search-tool mmseqs2 is specified.'
     )
     blast_parser.add_argument(
         '--overwrite-existing-blast',
         action='store_true',
-        help='Overwrite existing BLAST results'
+        help='Overwrite existing search results'
     )
     blast_parser.add_argument(
         '--skip-alignment',
@@ -1008,7 +1093,7 @@ Notes:
         '--min-identity',
         type=float,
         default=90.0,
-        help='Minimum percent identity for BLAST hits (default: 90.0)'
+        help='Minimum percent identity for search hits (default: 90.0)'
     )
     grouped_parser.add_argument(
         '--min-coverage',
@@ -1032,12 +1117,41 @@ Notes:
         '--num-threads',
         type=int,
         default=1,
-        help='Number of threads for BLAST and alignment (default: 1)'
+        help='Number of threads for search and alignment (default: 1)'
+    )
+    grouped_parser.add_argument(
+        '--search-tool',
+        type=str,
+        default='blast',
+        choices=['blast', 'mmseqs2'],
+        help='Sequence search tool to use (default: blast)'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-database',
+        type=str,
+        default=None,
+        help='MMseqs2 database name (default: same as --database). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-db-path',
+        type=Path,
+        default=None,
+        help='Path to the MMseqs2 database directory. '
+             'Only used when --search-tool mmseqs2 is specified. '
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-sensitivity',
+        type=float,
+        default=5.7,
+        help='MMseqs2 sensitivity setting, 1–7.5 (default: 5.7). '
+             'Only used when --search-tool mmseqs2 is specified.'
     )
     grouped_parser.add_argument(
         '--overwrite-existing-blast',
         action='store_true',
-        help='Overwrite existing BLAST results'
+        help='Overwrite existing search results'
     )
     grouped_parser.add_argument(
         '--skip-alignment',
