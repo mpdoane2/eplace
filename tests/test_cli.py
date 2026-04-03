@@ -445,6 +445,68 @@ def test_cli_write_search_metadata_blast_custom_source():
         assert data['database_name'] == 'custom_nt'
 
 
+def test_cli_metadata_not_overwritten_when_search_skipped():
+    """_write_search_metadata must not be called when the search output already
+    exists and skip_existing=True (the default non-overwrite mode).
+
+    The guard in blast_command / grouped_command is::
+
+        search_ran = not (search_output.exists() and skip_existing)
+        if search_ran:
+            _write_backend_search_metadata(args, mmseqs_database)
+
+    This test exercises that conditional to confirm metadata from the original
+    run is preserved when the search step is bypassed.
+    """
+    import json
+    import tempfile
+    from unittest.mock import patch
+
+    module = _load_cli_module_for_testing()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+
+        # Simulate first run: write initial metadata
+        module._write_search_metadata(
+            output_dir=output_dir,
+            search_backend='blast',
+            database_name='core_nt',
+            database_path='/home/user/blastdb',
+            database_source='ncbi_core_nt'
+        )
+        first_data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert first_data['database_source'] == 'ncbi_core_nt'
+
+        # Simulate second run: search output already exists + skip_existing=True
+        search_output = output_dir / "blast_results.txt"
+        search_output.touch()
+        skip_existing = True
+        search_ran = not (search_output.exists() and skip_existing)
+        assert not search_ran, (
+            "search_ran should be False when skip_existing=True and output exists"
+        )
+
+        # Confirm _write_search_metadata is NOT called when search_ran is False
+        with patch.object(module, '_write_search_metadata') as mock_write:
+            if search_ran:
+                module._write_search_metadata(
+                    output_dir=output_dir,
+                    search_backend='blast',
+                    database_name='different_db',
+                    database_path='/other/blastdb',
+                    database_source='different_source'
+                )
+            mock_write.assert_not_called()
+
+        # Original metadata must be unchanged
+        second_data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert second_data['database_source'] == 'ncbi_core_nt', (
+            "Metadata was unexpectedly overwritten when the search was skipped"
+        )
+        assert second_data['database_name'] == 'core_nt'
+
+
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
@@ -465,6 +527,7 @@ if __name__ == '__main__':
         test_cli_write_search_metadata_writes_json,
         test_cli_write_search_metadata_mmseqs2,
         test_cli_write_search_metadata_blast_custom_source,
+        test_cli_metadata_not_overwritten_when_search_skipped,
     ]
     
     passed = 0

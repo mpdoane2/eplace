@@ -234,9 +234,6 @@ def blast_command(args):
         logger.info(f"BLAST database source: {args.blast_db_source or args.database}")
     logger.info("=" * 60)
 
-    # Write search metadata for provenance tracking
-    _write_backend_search_metadata(args, mmseqs_database)
-
     # Step 1: Read query sequences
     logger.info("\n[Step 1/5] Reading query sequences...")
     try:
@@ -249,9 +246,12 @@ def blast_command(args):
         return 1
     
     # Step 2: Run sequence search
+    # Determine output path and whether the search will actually execute so
+    # that provenance metadata is written only when a fresh search runs.
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/5] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
+        search_ran = not (search_output.exists() and skip_existing)
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
@@ -278,6 +278,7 @@ def blast_command(args):
     else:
         logger.info("\n[Step 2/5] Running BLAST search...")
         search_output = args.output_dir / "blast_results.txt"
+        search_ran = not (search_output.exists() and skip_existing)
         try:
             success, filtered_hits = run_blast_search(
                 query_fasta=args.query_fasta,
@@ -300,7 +301,14 @@ def blast_command(args):
         except Exception:
             logger.exception(f"Error during BLAST search")
             return 1
-    
+
+    # Write search metadata for provenance tracking only when a fresh search
+    # was executed; skip when reusing existing results to avoid overwriting
+    # accurate provenance from the original run with potentially different
+    # CLI args.
+    if search_ran:
+        _write_backend_search_metadata(args, mmseqs_database)
+
     # Step 3: Group hits by query and display summary
     logger.info("\n[Step 3/5] Analyzing search results...")
     hits_by_query = defaultdict(int)
@@ -663,9 +671,6 @@ def grouped_command(args):
         logger.info(f"BLAST database source: {args.blast_db_source or args.database}")
     logger.info("=" * 60)
 
-    # Write search metadata for provenance tracking
-    _write_backend_search_metadata(args, mmseqs_database)
-
     # Step 1: Read query sequences
     logger.info("\n[Step 1/9] Reading query sequences...")
     try:
@@ -678,9 +683,12 @@ def grouped_command(args):
         return 1
     
     # Step 2: Run sequence search
+    # Determine output path and whether the search will actually execute so
+    # that provenance metadata is written only when a fresh search runs.
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/9] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
+        search_ran = not (search_output.exists() and skip_existing)
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
@@ -707,6 +715,7 @@ def grouped_command(args):
     else:
         logger.info("\n[Step 2/9] Running BLAST search...")
         search_output = args.output_dir / "blast_results.txt"
+        search_ran = not (search_output.exists() and skip_existing)
         try:
             success, filtered_hits = run_blast_search(
                 query_fasta=args.query_fasta,
@@ -729,7 +738,14 @@ def grouped_command(args):
         except Exception:
             logger.exception(f"Error during BLAST search")
             return 1
-    
+
+    # Write search metadata for provenance tracking only when a fresh search
+    # was executed; skip when reusing existing results to avoid overwriting
+    # accurate provenance from the original run with potentially different
+    # CLI args.
+    if search_ran:
+        _write_backend_search_metadata(args, mmseqs_database)
+
     # Step 3: Process taxonomy information
     logger.info(f"\n[Step 3/9] Processing taxonomy information (rank: {args.rank})...")
     
