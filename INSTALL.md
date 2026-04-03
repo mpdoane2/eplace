@@ -3,13 +3,14 @@
 1. Create a conda environment for ePLACE:
 
 ```
-mamba create -yn eplace 'python>=3.12'
+mamba create -yn eplace 'python==3.12'
+mamba activate eplace
 ```
 
 2. Install the required dependencies
 
 ```
-mamba install -y bioconda::blast bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
+mamba install -y bioconda::blast bioconda::pytaxonkit bioconda::iqtree mafft
 ```
 
 > Note 1.
