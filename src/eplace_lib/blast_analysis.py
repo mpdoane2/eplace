@@ -91,33 +91,90 @@ class BlastHit:
             The accession number extracted from subject_id, or the full subject_id
             if no standard format is detected
         """
-        # If the ID contains pipes, it's in a structured format
-        if '|' in self.subject_id:
-            parts = self.subject_id.split('|')
-            
-            # Handle gnl|database|identifier format separately
-            if len(parts) >= 3 and parts[0] == 'gnl':
-                return parts[2]
-            
-            # Look for standard database identifiers
-            # Common formats: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|
-            db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
-            for i, part in enumerate(parts):
-                if part in db_identifiers:
-                    # Next part should be the accession
-                    if i + 1 < len(parts) and parts[i + 1]:
-                        return parts[i + 1]
-            
-            # If no known database identifier found, try to return a reasonable fallback
-            # Filter out empty strings and known non-accession prefixes
-            known_prefixes = ['gi']
-            non_empty = [p for p in parts if p and p not in known_prefixes]
-            if non_empty:
-                # Return the last non-empty part (most likely to be the accession)
-                return non_empty[-1]
-        
-        # If no pipes or couldn't parse, assume it's already an accession
-        return self.subject_id
+        return _extract_accession_from_pipe_id(self.subject_id)
+
+
+def _extract_accession_from_pipe_id(seq_id: str) -> str:
+    """
+    Extract the accession number from a pipe-delimited NCBI-style sequence ID.
+
+    Handles formats such as:
+    - gi|2273658778|gb|MZ387488.1| -> MZ387488.1
+    - ref|NZ_CP123456.1|           -> NZ_CP123456.1
+    - gb|MZ387488.1|               -> MZ387488.1
+    - gnl|BL_ORD_ID|12345          -> 12345
+    - MZ387488.1                   -> MZ387488.1 (returned unchanged)
+    - sampleA|42                   -> sampleA|42 (no known pattern, returned unchanged)
+
+    No generic fallback is applied: if the ID contains pipes but does not match
+    a known NCBI format (gnl or a standard db-prefix like gb/ref/emb/…), the
+    original string is returned unchanged.  This prevents unrelated IDs that
+    share the same trailing pipe-segment (e.g. ``sampleA|42`` and
+    ``sampleB|42``) from being incorrectly considered equivalent.
+
+    Args:
+        seq_id: Sequence identifier, which may or may not be pipe-delimited.
+
+    Returns:
+        Extracted accession, or *seq_id* itself if no pipe-delimited structure is recognised.
+    """
+    if '|' in seq_id:
+        parts = seq_id.split('|')
+
+        # gnl|database|identifier format
+        if len(parts) >= 3 and parts[0] == 'gnl':
+            return parts[2]
+
+        # Known database prefixes: gi|123|gb|ACC.1|, ref|ACC.1|, gb|ACC.1|, etc.
+        db_identifiers = ['gb', 'ref', 'emb', 'dbj', 'pdb', 'prf', 'sp', 'tr']
+        for i, part in enumerate(parts):
+            if part in db_identifiers:
+                if i + 1 < len(parts) and parts[i + 1]:
+                    return parts[i + 1]
+
+    return seq_id
+
+
+def normalize_sequence_id(seq_id: str) -> str:
+    """
+    Normalize an arbitrary sequence or tree label to a canonical accession-like identifier.
+
+    This is used to compare IDs from different sources (BLAST subject IDs, FASTA headers,
+    tree leaf labels) that may be formatted differently but refer to the same sequence.
+
+    Normalization steps:
+    1. Strip a leading '>' (FASTA header prefix).
+    2. Take only the first whitespace-delimited token.
+    3. Remove MAFFT reverse-complement markers: a leading '_R_' prefix or a trailing '_R_' suffix.
+    4. If the token contains pipes ('|'), extract the accession via _extract_accession_from_pipe_id()
+       (gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.).
+    5. Otherwise return the token unchanged.
+
+    Args:
+        seq_id: Raw sequence identifier from any source.
+
+    Returns:
+        Canonical accession string suitable for exact comparison.
+    """
+    if not seq_id:
+        return seq_id
+
+    # Step 1: strip leading '>'
+    token = seq_id.lstrip('>')
+
+    # Step 2: take first whitespace-delimited token
+    parts = token.split()
+    token = parts[0] if parts else token
+
+    # Step 3: remove MAFFT reverse-complement markers
+    if token.startswith('_R_'):
+        token = token[3:]
+    if token.endswith('_R_'):
+        token = token[:-3]
+
+    # Step 4: parse pipe-delimited NCBI-style identifiers
+    return _extract_accession_from_pipe_id(token)
+
 
 class FastaReader:
     """

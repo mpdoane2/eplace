@@ -14,9 +14,24 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from collections import defaultdict
 
-from .blast_analysis import BlastHit
+from .blast_analysis import BlastHit, normalize_sequence_id
 
 import pytaxonkit
+
+
+def _subject_id_matches(subject_id: str, target_id: str) -> bool:
+    """Return True if *subject_id* refers to the same sequence as *target_id*.
+
+    Exact equality is checked first so that non-NCBI pipe-delimited labels
+    (e.g. ``sampleA|42``) are never conflated with an unrelated sequence that
+    happens to share the same trailing segment.  Normalized comparison is used
+    only as a fallback to handle cases where the same accession appears in
+    different formats (e.g. ``gi|...|gb|HQ641676.1|`` vs ``HQ641676.1``, or a
+    MAFFT ``_R_`` reverse-complement marker).
+    """
+    if subject_id == target_id:
+        return True
+    return normalize_sequence_id(subject_id) == normalize_sequence_id(target_id)
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -151,9 +166,11 @@ class TaxonomyExtractor:
             preferred_subject_id = preferred_representatives.get(rank_key)
             
             if preferred_subject_id:
-                # Look for the preferred representative in the current hits
+                # Look for the preferred representative in the current hits.
+                # Try exact match first; fall back to normalized comparison to handle
+                # NCBI format differences (e.g. gi|...|gb|ACC| vs ACC).
                 preferred_hit = next(
-                    (hit for hit in rank_hits if hit.subject_id == preferred_subject_id),
+                    (hit for hit in rank_hits if _subject_id_matches(hit.subject_id, preferred_subject_id)),
                     None
                 )
                 
@@ -617,12 +634,11 @@ def generate_classification_summary(
                 nearest_neighbor = find_nearest_neighbor_in_tree(tree_file, query_id)
                 
                 if nearest_neighbor:
-                    # Find the BLAST hit corresponding to the nearest neighbor
-                    # The nearest neighbor name might have the _R_ prefix (from MAFFT reverse complement)
-                    # or might be a sanitized version of the subject_id
+                    # Find the BLAST hit corresponding to the nearest neighbor.
+                    # Try exact match first; fall back to normalized comparison to handle
+                    # NCBI format differences and MAFFT _R_ markers.
                     for hit in query_hits:
-                        # Check direct match or match with _R_ prefix
-                        if hit.subject_id == nearest_neighbor or hit.subject_id == nearest_neighbor.replace('_R_', ''):
+                        if _subject_id_matches(hit.subject_id, nearest_neighbor):
                             tree_best_hit = hit
                             classification['tree_based_classification'] = 'Yes'
                             break

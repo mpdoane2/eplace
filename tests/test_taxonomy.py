@@ -18,7 +18,8 @@ from eplace_lib.taxonomy import (
     SequenceExtractor,
     process_blast_results_for_taxonomy,
     rewrite_blast_hits,
-    generate_classification_summary
+    generate_classification_summary,
+    _subject_id_matches,
 )
 from eplace_lib.blast_analysis import BlastHit
 
@@ -1473,5 +1474,41 @@ class TestGenerateClassificationSummary:
             assert data[col_idx['tree_based_classification']] == 'No'
             assert data[col_idx['tree_classification_name']] == 'N/A'
             assert data[col_idx['tree_group_name']] == 'N/A'
+
+
+class TestSubjectIdMatches:
+    """Test cases for the _subject_id_matches helper."""
+
+    def test_exact_match(self):
+        """Two identical IDs always match."""
+        assert _subject_id_matches("HQ641676.1", "HQ641676.1")
+
+    def test_exact_custom_pipe_id(self):
+        """Custom pipe-delimited IDs with the same value match exactly."""
+        assert _subject_id_matches("sampleA|42", "sampleA|42")
+
+    def test_different_custom_pipe_ids_do_not_match(self):
+        """Custom IDs sharing only a trailing segment must not be conflated (Codex P2 fix)."""
+        assert not _subject_id_matches("sampleA|42", "sampleB|42")
+
+    def test_ncbi_gi_format_vs_plain_accession(self):
+        """gi|...|gb|ACC| matches plain ACC via normalized comparison."""
+        assert _subject_id_matches("gi|336317909|gb|HQ641676.1|", "HQ641676.1")
+
+    def test_plain_accession_vs_ncbi_gi_format(self):
+        """Plain ACC matches gi|...|gb|ACC| (commutative)."""
+        assert _subject_id_matches("HQ641676.1", "gi|336317909|gb|HQ641676.1|")
+
+    def test_mafft_leading_r_prefix(self):
+        """_R_ACC in tree labels matches the plain ACC in BLAST hits."""
+        assert _subject_id_matches("HQ641676.1", "_R_HQ641676.1")
+
+    def test_mafft_trailing_r_suffix(self):
+        """ACC_R_ in tree labels matches the plain ACC in BLAST hits."""
+        assert _subject_id_matches("HQ641676.1", "HQ641676.1_R_")
+
+    def test_different_plain_accessions_do_not_match(self):
+        """Two different plain accessions are not equal."""
+        assert not _subject_id_matches("HQ641676.1", "MZ387488.1")
 
 
