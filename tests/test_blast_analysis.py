@@ -612,7 +612,7 @@ class TestMMseqs2Runner:
 
     @patch('eplace_lib.blast_analysis.MMseqs2Runner.check_mmseqs_available')
     @patch('subprocess.run')
-    def test_run_mmseqs_search_success(self, mock_run, mock_check):
+    def test_run_easy_search_success(self, mock_run, mock_check):
         """Test running mmseqs easy-search successfully."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -625,7 +625,7 @@ class TestMMseqs2Runner:
             mock_run.return_value = MagicMock(returncode=0, stderr="")
 
             runner = MMseqs2Runner(db_path=tmppath)
-            success = runner.run_mmseqs_search(query_file, output_file)
+            success = runner.run_easy_search(query_file, output_file)
 
             assert success is True
             mock_run.assert_called_once()
@@ -633,19 +633,19 @@ class TestMMseqs2Runner:
             assert call_args[0] == 'mmseqs'
             assert call_args[1] == 'easy-search'
 
-    def test_run_mmseqs_search_no_query_file(self):
+    def test_run_easy_search_no_query_file(self):
         """Test running mmseqs with a non-existent query file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             runner = MMseqs2Runner()
             with pytest.raises(FileNotFoundError):
-                runner.run_mmseqs_search(
+                runner.run_easy_search(
                     tmppath / "nonexistent.fasta",
                     tmppath / "output.txt"
                 )
 
     @patch('eplace_lib.blast_analysis.MMseqs2Runner.check_mmseqs_available')
-    def test_run_mmseqs_search_not_available(self, mock_check):
+    def test_run_easy_search_not_available(self, mock_check):
         """Test running mmseqs when it is not installed."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
@@ -656,13 +656,13 @@ class TestMMseqs2Runner:
 
             runner = MMseqs2Runner()
             with pytest.raises(RuntimeError, match="mmseqs is not available"):
-                runner.run_mmseqs_search(query_file, tmppath / "output.txt")
+                runner.run_easy_search(query_file, tmppath / "output.txt")
 
 
 class TestRunMMseqsSearch:
     """Test cases for the run_mmseqs_search convenience function."""
 
-    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_mmseqs_search')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search')
     @patch('eplace_lib.blast_analysis.MMseqs2Runner.parse_mmseqs_results')
     @patch('eplace_lib.blast_analysis.MMseqs2Runner.filter_hits')
     def test_run_mmseqs_search_success(self, mock_filter, mock_parse, mock_run):
@@ -686,7 +686,7 @@ class TestRunMMseqsSearch:
             assert success is True
             assert len(hits) == 1
 
-    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_mmseqs_search')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search')
     def test_run_mmseqs_search_fails(self, mock_run):
         """Test run_mmseqs_search when the search fails."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -718,7 +718,7 @@ class TestRunMMseqsSearch:
                 "seq1\tNC_001\t95.5\t200\t500\t1000\t1\t200\t100\t299\t1e-50\t250.0\t9606\t\n"
             )
 
-            with patch('eplace_lib.blast_analysis.MMseqs2Runner.run_mmseqs_search') as mock_run:
+            with patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search') as mock_run:
                 success, hits = run_mmseqs_search(
                     query_fasta=query_file,
                     output_file=output_file,
@@ -726,3 +726,33 @@ class TestRunMMseqsSearch:
                 )
                 mock_run.assert_not_called()
                 assert success is True
+
+    def test_run_mmseqs_search_invalid_sensitivity_too_low(self):
+        """Test that sensitivity below 1.0 raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            with pytest.raises(ValueError, match="sensitivity must be between"):
+                run_mmseqs_search(
+                    query_fasta=query_file,
+                    output_file=output_file,
+                    sensitivity=0.5
+                )
+
+    def test_run_mmseqs_search_invalid_sensitivity_too_high(self):
+        """Test that sensitivity above 7.5 raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            with pytest.raises(ValueError, match="sensitivity must be between"):
+                run_mmseqs_search(
+                    query_fasta=query_file,
+                    output_file=output_file,
+                    sensitivity=8.0
+                )

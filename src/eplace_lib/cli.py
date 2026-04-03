@@ -107,14 +107,15 @@ def blast_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/5] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
+        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
                 output_file=search_output,
                 min_identity=args.min_identity,
                 min_coverage=args.min_coverage,
-                database=args.database,
-                db_path=args.blastdb_path,
+                database=mmseqs_database,
+                db_path=args.mmseqs_db_path,
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing
@@ -520,14 +521,15 @@ def grouped_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info("\n[Step 2/9] Running MMseqs2 search...")
         search_output = args.output_dir / "mmseqs_results.txt"
+        mmseqs_database = args.mmseqs_database if args.mmseqs_database else args.database
         try:
             success, filtered_hits = run_mmseqs_search(
                 query_fasta=args.query_fasta,
                 output_file=search_output,
                 min_identity=args.min_identity,
                 min_coverage=args.min_coverage,
-                database=args.database,
-                db_path=args.blastdb_path,
+                database=mmseqs_database,
+                db_path=args.mmseqs_db_path,
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing
@@ -962,15 +964,13 @@ Notes:
         '--database',
         type=str,
         default='core_nt',
-        help='Database name used for the search (default: core_nt). '
-             'For BLAST this is the BLAST database name; for MMseqs2 it is '
-             'the MMseqs2 database name inside --blastdb-path.'
+        help='BLAST database name (default: core_nt)'
     )
     blast_parser.add_argument(
         '--blastdb-path',
         type=Path,
         default=None,
-        help='Path to the search database directory (used for both BLAST and MMseqs2)'
+        help='Path to BLAST database directory'
     )
     blast_parser.add_argument(
         '--num-threads',
@@ -984,6 +984,21 @@ Notes:
         default='blast',
         choices=['blast', 'mmseqs2'],
         help='Sequence search tool to use (default: blast)'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-database',
+        type=str,
+        default=None,
+        help='MMseqs2 database name (default: same as --database). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    blast_parser.add_argument(
+        '--mmseqs-db-path',
+        type=Path,
+        default=None,
+        help='Path to the MMseqs2 database directory. '
+             'Only used when --search-tool mmseqs2 is specified. '
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
     )
     blast_parser.add_argument(
         '--mmseqs-sensitivity',
@@ -1090,15 +1105,13 @@ Notes:
         '--database',
         type=str,
         default='core_nt',
-        help='Database name used for the search (default: core_nt). '
-             'For BLAST this is the BLAST database name; for MMseqs2 it is '
-             'the MMseqs2 database name inside --blastdb-path.'
+        help='BLAST database name (default: core_nt)'
     )
     grouped_parser.add_argument(
         '--blastdb-path',
         type=Path,
         default=None,
-        help='Path to the search database directory (used for both BLAST and MMseqs2)'
+        help='Path to BLAST database directory'
     )
     grouped_parser.add_argument(
         '--num-threads',
@@ -1112,6 +1125,21 @@ Notes:
         default='blast',
         choices=['blast', 'mmseqs2'],
         help='Sequence search tool to use (default: blast)'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-database',
+        type=str,
+        default=None,
+        help='MMseqs2 database name (default: same as --database). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-db-path',
+        type=Path,
+        default=None,
+        help='Path to the MMseqs2 database directory. '
+             'Only used when --search-tool mmseqs2 is specified. '
+             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db.'
     )
     grouped_parser.add_argument(
         '--mmseqs-sensitivity',

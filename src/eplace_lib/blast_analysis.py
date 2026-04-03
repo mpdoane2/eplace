@@ -532,7 +532,7 @@ class MMseqs2Runner:
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
 
-    def run_mmseqs_search(
+    def run_easy_search(
         self,
         query_fasta: Path,
         output_file: Path,
@@ -783,7 +783,14 @@ def run_mmseqs_search(
 
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])
+
+    Raises:
+        ValueError: If sensitivity is outside the valid range (1–7.5)
     """
+    if not 1.0 <= sensitivity <= 7.5:
+        raise ValueError(
+            f"MMseqs2 sensitivity must be between 1.0 and 7.5, got {sensitivity}"
+        )
     runner = MMseqs2Runner(db_path)
 
     if os.path.exists(output_file) and skip_existing:
@@ -792,7 +799,7 @@ def run_mmseqs_search(
             "Skipping and using these results"
         )
     else:
-        success = runner.run_mmseqs_search(
+        success = runner.run_easy_search(
             query_fasta=query_fasta,
             output_file=output_file,
             database=database,
