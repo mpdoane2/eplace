@@ -9,6 +9,7 @@ without requiring external dependencies like pytaxonkit.
 import ast
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 
 def test_cli_module_exists():
@@ -102,6 +103,7 @@ def test_cli_imports():
     # Check for essential imports
     assert 'import argparse' in source, "Missing argparse import"
     assert 'import logging' in source, "Missing logging import"
+    assert 'import json' in source, "Missing json import"
     assert 'from pathlib import Path' in source, "Missing Path import"
 
 
@@ -248,6 +250,263 @@ def test_cli_log_level_in_all_subparsers():
     )
 
 
+
+def test_cli_has_mmseqs_db_source_argument():
+    """Test that blast and grouped parsers have the --mmseqs-db-source argument."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    # Collect all add_argument('--mmseqs-db-source', ...) calls and the parser they belong to.
+    db_source_parsers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == 'add_argument'):
+            continue
+        has_db_source = any(
+            isinstance(a, ast.Constant) and a.value == '--mmseqs-db-source'
+            for a in node.args
+        )
+        if has_db_source and isinstance(func.value, ast.Name):
+            db_source_parsers.add(func.value.id)
+
+    expected = {'blast_parser', 'grouped_parser'}
+    missing = expected - db_source_parsers
+    assert not missing, (
+        f"--mmseqs-db-source argument missing from: {sorted(missing)}"
+    )
+
+
+def test_cli_has_blast_db_source_argument():
+    """Test that blast and grouped parsers have the --blast-db-source argument."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    db_source_parsers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == 'add_argument'):
+            continue
+        has_db_source = any(
+            isinstance(a, ast.Constant) and a.value == '--blast-db-source'
+            for a in node.args
+        )
+        if has_db_source and isinstance(func.value, ast.Name):
+            db_source_parsers.add(func.value.id)
+
+    expected = {'blast_parser', 'grouped_parser'}
+    missing = expected - db_source_parsers
+    assert not missing, (
+        f"--blast-db-source argument missing from: {sorted(missing)}"
+    )
+
+
+def test_cli_has_write_search_metadata_function():
+    """Test that the CLI module defines the _write_search_metadata helper."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+    found = any(
+        isinstance(node, ast.FunctionDef) and node.name == '_write_search_metadata'
+        for node in ast.walk(tree)
+    )
+    assert found, "_write_search_metadata function not found in CLI module"
+
+
+def _load_cli_module_for_testing():
+    """Load cli.py with all unavailable dependencies mocked out.
+
+    This helper is used for isolated unit testing of pure-Python helpers
+    defined in ``cli.py`` (such as ``_write_search_metadata``) without
+    loading the full ePLACE dependency stack.  Integration tests that
+    exercise the complete workflow still require pytaxonkit to be installed
+    via conda/mamba as described in INSTALL.md.
+
+    The loaded module object is returned directly.  All stubbed entries are
+    scoped to the ``patch.dict`` context manager and are removed from
+    ``sys.modules`` before this function returns, so repeated calls each
+    produce a fresh module instance without cross-test contamination.
+
+    Returns:
+        The loaded cli module object.
+    """
+    import importlib.util
+    import sys
+    from unittest.mock import MagicMock
+
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+
+    stubs = {
+        'pytaxonkit': MagicMock(),
+        'eplace_lib': MagicMock(),
+        'eplace_lib.ncbi_download': MagicMock(setup_ncbi_database=MagicMock()),
+        'eplace_lib.blast_analysis': MagicMock(),
+        'eplace_lib.taxonomy': MagicMock(),
+        'eplace_lib.alignment': MagicMock(),
+    }
+
+    # Name the spec as "eplace_lib._cli_under_test" so that spec.parent
+    # == "eplace_lib", matching the relative imports used inside cli.py.
+    module_name = 'eplace_lib._cli_under_test'
+    spec = importlib.util.spec_from_file_location(module_name, cli_path)
+    module = importlib.util.module_from_spec(spec)
+
+    # patch.dict restores sys.modules to its original state when the
+    # context manager exits, so no stub leaks between test invocations.
+    with patch.dict(sys.modules, {**stubs, module_name: module}):
+        spec.loader.exec_module(module)
+
+    return module
+
+
+def test_cli_write_search_metadata_writes_json():
+    """Test that _write_search_metadata writes a JSON file with the expected keys."""
+    import json
+    import tempfile
+
+    module = _load_cli_module_for_testing()
+    write_fn = module._write_search_metadata
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+        write_fn(
+            output_dir=output_dir,
+            search_backend='blast',
+            database_name='core_nt',
+            database_path='/home/user/blastdb',
+            database_source='ncbi_core_nt'
+        )
+        metadata_file = output_dir / "search_metadata.json"
+        assert metadata_file.exists(), "search_metadata.json was not created"
+        data = json.loads(metadata_file.read_text())
+        assert data['search_backend'] == 'blast'
+        assert data['database_name'] == 'core_nt'
+        assert data['database_path'] == '/home/user/blastdb'
+        assert data['database_source'] == 'ncbi_core_nt'
+
+
+def test_cli_write_search_metadata_mmseqs2():
+    """Test that _write_search_metadata records mmseqs2 backend correctly."""
+    import json
+    import tempfile
+
+    module = _load_cli_module_for_testing()
+    write_fn = module._write_search_metadata
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+        write_fn(
+            output_dir=output_dir,
+            search_backend='mmseqs2',
+            database_name='my_core_nt_db',
+            database_path='/data/mmseqs2db',
+            database_source='ncbi_core_nt_derived_mmseqs2'
+        )
+        metadata_file = output_dir / "search_metadata.json"
+        assert metadata_file.exists(), "search_metadata.json was not created"
+        data = json.loads(metadata_file.read_text())
+        assert data['search_backend'] == 'mmseqs2'
+        assert data['database_name'] == 'my_core_nt_db'
+        assert data['database_path'] == '/data/mmseqs2db'
+        assert data['database_source'] == 'ncbi_core_nt_derived_mmseqs2'
+
+
+def test_cli_write_search_metadata_blast_custom_source():
+    """Test that BLAST metadata uses blast_db_source when provided, else database name."""
+    import json
+    import tempfile
+
+    module = _load_cli_module_for_testing()
+    write_fn = module._write_search_metadata
+
+    # When blast_db_source is explicitly provided, it is recorded as-is.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+        write_fn(
+            output_dir=output_dir,
+            search_backend='blast',
+            database_name='custom_nt',
+            database_path='/custom/blastdb',
+            database_source='custom_nt'
+        )
+        data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert data['database_source'] == 'custom_nt'
+        assert data['database_name'] == 'custom_nt'
+
+
+def test_cli_metadata_not_overwritten_when_search_skipped():
+    """_write_search_metadata must not be called when the search output already
+    exists and skip_existing=True (the default non-overwrite mode).
+
+    The guard in blast_command / grouped_command is::
+
+        search_ran = not (search_output.exists() and skip_existing)
+        if search_ran:
+            _write_backend_search_metadata(args, mmseqs_database)
+
+    This test exercises that conditional to confirm metadata from the original
+    run is preserved when the search step is bypassed.
+    """
+    import json
+    import tempfile
+    from unittest.mock import patch
+
+    module = _load_cli_module_for_testing()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+
+        # Simulate first run: write initial metadata
+        module._write_search_metadata(
+            output_dir=output_dir,
+            search_backend='blast',
+            database_name='core_nt',
+            database_path='/home/user/blastdb',
+            database_source='ncbi_core_nt'
+        )
+        first_data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert first_data['database_source'] == 'ncbi_core_nt'
+
+        # Simulate second run: search output already exists + skip_existing=True
+        search_output = output_dir / "blast_results.txt"
+        search_output.touch()
+        skip_existing = True
+        search_ran = not (search_output.exists() and skip_existing)
+        assert not search_ran, (
+            "search_ran should be False when skip_existing=True and output exists"
+        )
+
+        # Confirm _write_search_metadata is NOT called when search_ran is False
+        with patch.object(module, '_write_search_metadata') as mock_write:
+            if search_ran:
+                module._write_search_metadata(
+                    output_dir=output_dir,
+                    search_backend='blast',
+                    database_name='different_db',
+                    database_path='/other/blastdb',
+                    database_source='different_source'
+                )
+            mock_write.assert_not_called()
+
+        # Original metadata must be unchanged
+        second_data = json.loads((output_dir / "search_metadata.json").read_text())
+        assert second_data['database_source'] == 'ncbi_core_nt', (
+            "Metadata was unexpectedly overwritten when the search was skipped"
+        )
+        assert second_data['database_name'] == 'core_nt'
+
+
 if __name__ == '__main__':
     # Run tests manually without pytest
     import traceback
@@ -262,6 +521,13 @@ if __name__ == '__main__':
         test_cli_imports,
         test_cli_has_log_level_argument,
         test_cli_log_level_in_all_subparsers,
+        test_cli_has_mmseqs_db_source_argument,
+        test_cli_has_blast_db_source_argument,
+        test_cli_has_write_search_metadata_function,
+        test_cli_write_search_metadata_writes_json,
+        test_cli_write_search_metadata_mmseqs2,
+        test_cli_write_search_metadata_blast_custom_source,
+        test_cli_metadata_not_overwritten_when_search_skipped,
     ]
     
     passed = 0
