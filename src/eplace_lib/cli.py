@@ -828,6 +828,24 @@ def grouped_command(args):
     return 0
 
 
+_LOG_LEVEL_CHOICES = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+
+def _add_log_level_argument(p, *, is_top_level=False):
+    """Add a --log-level argument to *p*.
+
+    For the top-level parser the default is 'INFO'.  For subparsers the
+    default is suppressed so that an explicit value on the top-level parser
+    is not overwritten when the subparser is invoked without the flag.
+    """
+    p.add_argument(
+        '--log-level',
+        default='INFO' if is_top_level else argparse.SUPPRESS,
+        choices=_LOG_LEVEL_CHOICES,
+        help='Set logging verbosity level (default: INFO)'
+    )
+
+
 def main():
     """Main entry point for the ePLACE CLI."""
     parser = argparse.ArgumentParser(
@@ -863,13 +881,8 @@ Documentation: https://github.com/linsalrob/eplace
         action='version',
         version='%(prog)s 0.1.0'
     )
-    
-    parser.add_argument(
-        '--log-level',
-        default='INFO',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Set logging verbosity level (default: INFO)'
-    )
+
+    _add_log_level_argument(parser, is_top_level=True)
     
     subparsers = parser.add_subparsers(
         dest='command',
@@ -903,12 +916,7 @@ Notes:
         action='store_true',
         help='Force redownload even if database exists'
     )
-    download_parser.add_argument(
-        '--log-level',
-        default=argparse.SUPPRESS,
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Set logging verbosity level (default: INFO)'
-    )
+    _add_log_level_argument(download_parser)
     
     # BLAST subcommand (individual workflow)
     blast_parser = subparsers.add_parser(
@@ -1035,12 +1043,7 @@ Notes:
         default=None,
         help='Path to output classification TSV file'
     )
-    blast_parser.add_argument(
-        '--log-level',
-        default=argparse.SUPPRESS,
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Set logging verbosity level (default: INFO)'
-    )
+    _add_log_level_argument(blast_parser)
     
     # Grouped subcommand
     grouped_parser = subparsers.add_parser(
@@ -1188,12 +1191,7 @@ Notes:
         default=None,
         help='Path to output classification TSV file'
     )
-    grouped_parser.add_argument(
-        '--log-level',
-        default=argparse.SUPPRESS,
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Set logging verbosity level (default: INFO)'
-    )
+    _add_log_level_argument(grouped_parser)
     
     # Relabel subcommand
     relabel_parser = subparsers.add_parser(
@@ -1246,12 +1244,7 @@ Notes:
         default=None,
         help='Path to BLAST database directory (optional, not required for relabeling)'
     )
-    relabel_parser.add_argument(
-        '--log-level',
-        default=argparse.SUPPRESS,
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='Set logging verbosity level (default: INFO)'
-    )
+    _add_log_level_argument(relabel_parser)
     
     # Parse arguments
     args = parser.parse_args()
