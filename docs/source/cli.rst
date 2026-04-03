@@ -28,7 +28,7 @@ Commands Overview
    * - ``eplace download``
      - Download NCBI BLAST database
    * - ``eplace search``
-     - Run individual BLAST workflow (one tree per query)
+     - Run individual search workflow (one tree per query; BLAST by default, MMseqs2 via ``--search-tool``)
    * - ``eplace grouped``
      - Run grouped BLAST workflow (one tree per taxonomic group)
    * - ``eplace relabel``

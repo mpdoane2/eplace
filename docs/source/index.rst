@@ -61,7 +61,7 @@ Basic Usage
    # Download NCBI database
    eplace download
 
-   # Run BLAST analysis
+   # Run search analysis (BLAST by default)
    eplace search query.fasta output_dir
 
    # Run grouped analysis

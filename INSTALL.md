@@ -10,7 +10,7 @@ mamba activate eplace
 2. Install the required dependencies
 
 ```
-mamba install -y bioconda::blast bioconda::mmseqs2 bioconda::pytaxonkit bioconda::iqtree mafft
+mamba install -y bioconda::blast bioconda::mmseqs2 bioconda::pytaxonkit bioconda::iqtree bioconda::mafft
 ```
 
 > Note 1.

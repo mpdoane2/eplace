@@ -42,10 +42,10 @@ Create a FASTA file with your query sequences:
    >query_sequence_2
    GCTAGCTAGCTAGCTAGCTAGCTA
 
-Step 3: Run BLAST Analysis
+Step 3: Run Search Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Run a basic BLAST analysis:
+Run a basic search analysis (BLAST by default; use ``--search-tool mmseqs2`` for MMseqs2):
 
 .. code-block:: bash
 

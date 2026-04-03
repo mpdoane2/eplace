@@ -81,7 +81,7 @@ Usage Example
        --min-coverage 85 \
        --num-threads 4
 
-   # BLAST only, no alignment
+   # Search only, no alignment/tree building
    eplace search queries.fasta output_dir --skip-alignment
 
 Grouped Workflow
@@ -393,7 +393,7 @@ You can run different analyses on the same BLAST results:
 
 .. code-block:: bash
 
-   # First run: BLAST only
+   # First run: search only (no alignment/tree building)
    eplace search queries.fasta output1 --skip-alignment
 
    # Analyze at different ranks using same BLAST results
