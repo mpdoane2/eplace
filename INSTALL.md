@@ -10,7 +10,7 @@ mamba activate eplace
 2. Install the required dependencies
 
 ```
-mamba install -y bioconda::blast bioconda::pytaxonkit bioconda::iqtree mafft
+mamba install -y bioconda::blast bioconda::mmseqs2 bioconda::pytaxonkit bioconda::iqtree mafft
 ```
 
 > Note 1.
@@ -42,13 +42,13 @@ eplace --version
 Once installed, you can use the `eplace` command with three subcommands:
 
 - `eplace download` - Download NCBI BLAST database
-- `eplace blast` - Run individual BLAST workflow (one tree per query)
+- `eplace search` - Run individual search workflow (one tree per query)
 - `eplace grouped` - Run grouped BLAST workflow (one tree per taxonomic group)
 
 For detailed help on each command:
 ```bash
 eplace download --help
-eplace blast --help
+eplace search --help
 eplace grouped --help
 ```
 

@@ -857,8 +857,8 @@ Examples:
   # Download NCBI database
   eplace download
   
-  # Run individual BLAST workflow
-  eplace blast query.fasta output_dir
+  # Run individual search workflow
+  eplace search query.fasta output_dir
   
   # Run grouped BLAST workflow
   eplace grouped query.fasta output_dir --group-rank order
@@ -868,7 +868,7 @@ Examples:
   
 For detailed help on each subcommand:
   eplace download --help
-  eplace blast --help
+  eplace search --help
   eplace grouped --help
   eplace relabel --help
 
@@ -918,30 +918,30 @@ Notes:
     )
     _add_log_level_argument(download_parser)
     
-    # BLAST subcommand (individual workflow)
+    # Search subcommand (individual workflow)
     blast_parser = subparsers.add_parser(
-        'blast',
-        help='Run BLAST search with individual taxonomy analysis',
-        description='Run BLAST search and extract representative sequences per query',
+        'search',
+        help='Run sequence search with individual taxonomy analysis',
+        description='Run sequence search and extract representative sequences per query',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Basic usage with default parameters
-  eplace blast query.fasta output_dir
+  eplace search query.fasta output_dir
   
   # Specify taxonomic rank and custom thresholds
-  eplace blast query.fasta output_dir --rank genus --min-identity 95
+  eplace search query.fasta output_dir --rank genus --min-identity 95
   
-  # Skip alignment and tree building (BLAST only)
-  eplace blast query.fasta output_dir --skip-alignment
+  # Skip alignment and tree building (search only)
+  eplace search query.fasta output_dir --skip-alignment
   
   # Use custom BLAST database location
-  eplace blast query.fasta output_dir --blastdb-path /path/to/blastdb
+  eplace search query.fasta output_dir --blastdb-path /path/to/blastdb
 
 Notes:
   - Creates one phylogenetic tree per query sequence
   - Default filtering: 90% identity, 80% query coverage
-  - Requires BLAST+ tools and optionally MAFFT and IQTree
+  - Requires BLAST+ or MMseqs2 tools and optionally MAFFT and IQTree
         """
     )
     blast_parser.add_argument(
@@ -1262,7 +1262,7 @@ Notes:
     # Route to appropriate command handler
     if args.command == 'download':
         return download_command(args)
-    elif args.command == 'blast':
+    elif args.command == 'search':
         return blast_command(args)
     elif args.command == 'grouped':
         return grouped_command(args)

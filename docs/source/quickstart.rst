@@ -49,7 +49,7 @@ Run a basic BLAST analysis:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir
+   eplace search query.fasta output_dir
 
 This will:
 
@@ -88,7 +88,7 @@ Analyze each query sequence independently with custom parameters:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir \
+   eplace search query.fasta output_dir \
        --rank genus \
        --min-identity 95 \
        --min-coverage 85 \
@@ -132,7 +132,7 @@ If you only want BLAST results without alignment and tree building:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir --skip-alignment
+   eplace search query.fasta output_dir --skip-alignment
 
 High Stringency Search
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -141,7 +141,7 @@ For more stringent matching:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir \
+   eplace search query.fasta output_dir \
        --min-identity 98 \
        --min-coverage 95
 
@@ -152,7 +152,7 @@ If your BLAST database is in a non-standard location:
 
 .. code-block:: bash
 
-   eplace blast query.fasta output_dir \
+   eplace search query.fasta output_dir \
        --blastdb-path /path/to/custom/blastdb
 
 Using as a Python Library
@@ -253,7 +253,7 @@ For grouped analysis, you'll additionally see directories named by taxonomic gro
 Choosing Between Workflows
 ---------------------------
 
-Individual Workflow (``eplace blast``)
+Individual Workflow (``eplace search``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Use when:**
@@ -291,7 +291,7 @@ For detailed command-line options, see:
 * :doc:`cli` - Complete CLI reference
 * ``eplace --help`` - General help
 * ``eplace download --help`` - Download command help
-* ``eplace blast --help`` - BLAST command help
+* ``eplace search --help`` - BLAST command help
 * ``eplace grouped --help`` - Grouped command help
 * ``eplace relabel --help`` - Relabel command help
 

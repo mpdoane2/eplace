@@ -187,7 +187,7 @@ def show_usage_tips():
 
 6. Integration with Other Commands:
    # First run BLAST workflow
-   eplace blast query.fasta output_dir --rank genus
+   eplace search query.fasta output_dir --rank genus
    
    # Then relabel the tree with different rank
    eplace relabel output_dir/blast_results.txt \\
