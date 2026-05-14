@@ -10,6 +10,7 @@ import sys
 import json
 import argparse
 import logging
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from collections import defaultdict
 
@@ -35,6 +36,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _get_cli_version() -> str:
+    """Get package version from installed metadata."""
+    try:
+        return version("eplace")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def _write_search_metadata(
@@ -1055,7 +1064,7 @@ Documentation: https://github.com/linsalrob/eplace
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 0.1.0'
+        version=f'%(prog)s {_get_cli_version()}'
     )
 
     _add_log_level_argument(parser, is_top_level=True)
