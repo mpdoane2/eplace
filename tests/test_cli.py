@@ -203,6 +203,60 @@ def test_cli_has_log_level_argument():
     )
 
 
+def test_cli_version_uses_package_metadata():
+    """Test that --version pulls from package metadata instead of a hardcoded value."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    version_helper_calls_metadata = False
+    version_argument_uses_helper = False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == '_get_cli_version':
+            for subnode in ast.walk(node):
+                if (
+                    isinstance(subnode, ast.Call)
+                    and isinstance(subnode.func, ast.Name)
+                    and subnode.func.id == 'version'
+                    and subnode.args
+                    and isinstance(subnode.args[0], ast.Constant)
+                    and subnode.args[0].value == 'eplace'
+                ):
+                    version_helper_calls_metadata = True
+
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == 'add_argument'
+            and any(
+                isinstance(a, ast.Constant) and a.value == '--version'
+                for a in node.args
+            )
+        ):
+            for kw in node.keywords:
+                if kw.arg != 'version':
+                    continue
+                if isinstance(kw.value, ast.JoinedStr):
+                    for value_node in kw.value.values:
+                        if (
+                            isinstance(value_node, ast.FormattedValue)
+                            and isinstance(value_node.value, ast.Call)
+                            and isinstance(value_node.value.func, ast.Name)
+                            and value_node.value.func.id == '_get_cli_version'
+                        ):
+                            version_argument_uses_helper = True
+
+    assert version_helper_calls_metadata, (
+        "_get_cli_version should read version metadata for the 'eplace' package"
+    )
+    assert version_argument_uses_helper, (
+        "--version argument should use _get_cli_version() instead of a hardcoded version string"
+    )
+
+
 def test_cli_log_level_in_all_subparsers():
     """Test that --log-level is added to every subparser so it works after subcommands."""
     cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
