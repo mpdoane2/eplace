@@ -6,8 +6,14 @@ specifically the core nucleotide (nt) database.
 """
 
 import os
+import csv
+import gzip
 import hashlib
+import shutil
+import subprocess
 import tarfile
+from datetime import datetime, timezone
+import tempfile
 import logging
 from pathlib import Path
 from typing import Optional, List, Tuple
@@ -320,3 +326,325 @@ def setup_ncbi_database(force_download: bool = False, verbose: bool = True) -> T
     """
     downloader = NCBIDownloader()
     return downloader.download_and_setup_database(force_download, verbose)
+
+
+def get_total_memory_gb() -> float:
+    """Get total system memory in GiB.
+
+    On Linux this first reads ``/proc/meminfo`` (``MemTotal``). If that is not
+    available, it falls back to POSIX ``os.sysconf``. Returns ``0.0`` when both
+    strategies fail.
+    """
+    try:
+        with open("/proc/meminfo", "r") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemTotal:"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        total_kb = int(parts[1])
+                        return total_kb / (1024 ** 2)
+    except (OSError, ValueError):
+        pass
+
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        num_pages = os.sysconf("SC_PHYS_PAGES")
+        return (page_size * num_pages) / (1024 ** 3)
+    except (AttributeError, ValueError, OSError):
+        return 0.0
+
+
+def check_available_memory_gb(required_gb: float) -> Tuple[bool, float]:
+    """Check whether total system memory meets a required threshold in GiB."""
+    total_gb = get_total_memory_gb()
+    return total_gb >= required_gb, total_gb
+
+
+class MMseqsDownloader:
+    """Download and configure MMseqs2 NT databases and taxonomy sidecar files.
+
+    Directory resolution for MMseqs2 databases prefers ``$MMSEQS_DB_DIR``, then
+    ``$MMSEQS2DB`` (legacy), then ``~/mmseqs2db``.
+
+    Workflow:
+    1. Download NT with ``mmseqs databases``.
+    2. Optionally fetch accession2taxid files and build mapping TSV.
+    3. Attach taxonomy sidecars with ``mmseqs createtaxdb``.
+    """
+
+    MMSEQS_DB_DIR_ENV = "MMSEQS_DB_DIR"
+    LEGACY_MMSEQS_DB_DIR_ENV = "MMSEQS2DB"
+    NUCLEOTIDE_DB_NAME = "NT"
+    ACC2TAXID_BASE = "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/"
+
+    def __init__(self, db_dir: Optional[Path] = None):
+        """Initialize the MMseqs downloader."""
+        self.db_dir = db_dir
+
+    def get_mmseqsdb_directory(self) -> Path:
+        """Get or determine the MMseqs2 database directory.
+
+        Resolution order:
+        1. Explicit path passed at initialization.
+        2. ``$MMSEQS_DB_DIR``.
+        3. ``$MMSEQS2DB`` (legacy fallback).
+        4. ``~/mmseqs2db``.
+        """
+        if self.db_dir is None:
+            mmseqs_env = (
+                os.environ.get(self.MMSEQS_DB_DIR_ENV)
+                or os.environ.get(self.LEGACY_MMSEQS_DB_DIR_ENV)
+            )
+            if mmseqs_env:
+                self.db_dir = Path(mmseqs_env)
+            else:
+                self.db_dir = Path.home() / "mmseqs2db"
+
+        self.db_dir.mkdir(parents=True, exist_ok=True)
+        return self.db_dir
+
+    @staticmethod
+    def _run_command(cmd: list[str], error_context: str) -> Tuple[bool, str]:
+        """Run a command and return success plus an error message on failure."""
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            executable = cmd[0] if cmd else "command"
+            return False, f"{executable} was not found. Please install it and ensure it is in PATH."
+        except subprocess.SubprocessError as e:
+            return False, f"{error_context}: {e}"
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip() if result.stderr else "unknown error"
+            return False, f"{error_context}: {stderr}"
+
+        return True, ""
+
+    def download_nt_database(
+        self,
+        force_download: bool = False,
+        threads: int = 1
+    ) -> Tuple[bool, str, Optional[Path]]:
+        """Download MMseqs2 NT database using ``mmseqs databases``."""
+        mmseqs_dir = self.get_mmseqsdb_directory()
+        date_stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+        target_dir = mmseqs_dir / f"{self.NUCLEOTIDE_DB_NAME}.{date_stamp}"
+        target_db = target_dir / self.NUCLEOTIDE_DB_NAME
+
+        if target_db.exists() and not force_download:
+            return True, f"MMseqs2 NT database already exists at {target_db}", target_db
+
+        if force_download and target_dir.exists():
+            shutil.rmtree(target_dir)
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(prefix="mmseqs_tmp_", dir=str(mmseqs_dir)) as tmp_dir:
+            cmd = [
+                "mmseqs",
+                "databases",
+                "--threads",
+                str(threads),
+                self.NUCLEOTIDE_DB_NAME,
+                str(target_db),
+                tmp_dir
+            ]
+            success, error = self._run_command(cmd, "MMseqs2 database download failed")
+            if not success:
+                return False, error, None
+
+        return True, f"MMseqs2 NT database downloaded to {target_db}", target_db
+
+    @staticmethod
+    def _validate_mmseqs_database(mmseqs_db: Path) -> Tuple[bool, str]:
+        """Validate that MMseqs2 NT database files exist."""
+        required_files = [
+            mmseqs_db,
+            mmseqs_db.with_suffix(".index"),
+            mmseqs_db.with_suffix(".dbtype"),
+            mmseqs_db.with_suffix(".lookup"),
+        ]
+        missing = [str(path) for path in required_files if not path.exists()]
+        if missing:
+            return False, f"Missing required MMseqs2 database files: {', '.join(missing)}"
+        return True, ""
+
+    @staticmethod
+    def _validate_taxonomy_dump(ncbi_taxonomy: Path) -> Tuple[bool, str]:
+        """Validate taxonomy dump files required by ``mmseqs createtaxdb``."""
+        required_files = ["nodes.dmp", "names.dmp", "merged.dmp"]
+        missing = [f for f in required_files if not (ncbi_taxonomy / f).is_file()]
+        if missing:
+            return False, f"Missing required NCBI taxonomy files in {ncbi_taxonomy}: {', '.join(missing)}"
+        return True, ""
+
+    def _resolve_acc2taxid_dir(self, ncbi_taxonomy: Path, acc2taxid_dir: Optional[Path]) -> Path:
+        """Resolve accession2taxid directory from arg, env, or taxonomy path.
+
+        Resolution order:
+        1. Explicit ``acc2taxid_dir`` argument.
+        2. ``$ACC2TAXID_DIR`` environment variable.
+        3. ``<ncbi_taxonomy>/accession2taxid``.
+        """
+        if acc2taxid_dir is not None:
+            return acc2taxid_dir
+
+        env_value = os.environ.get("ACC2TAXID_DIR")
+        if env_value:
+            return Path(env_value)
+
+        return ncbi_taxonomy / "accession2taxid"
+
+    def _ensure_accession2taxid_files(self, acc2taxid_dir: Path) -> Tuple[bool, str]:
+        """Download required accession2taxid files if they are missing."""
+        acc2taxid_dir.mkdir(parents=True, exist_ok=True)
+        required_files = [
+            "nucl_gb.accession2taxid.gz",
+            "nucl_wgs.accession2taxid.gz",
+        ]
+
+        for filename in required_files:
+            target = acc2taxid_dir / filename
+            if target.exists() and target.stat().st_size > 0:
+                continue
+            try:
+                urlretrieve(self.ACC2TAXID_BASE + filename, target)
+            except URLError as e:
+                return False, f"Failed to download {filename}: {e}"
+        return True, ""
+
+    @staticmethod
+    def _build_tax_mapping_file(acc2taxid_dir: Path, mapping_file: Path) -> Tuple[bool, str]:
+        """Create accession-to-taxid mapping file for MMseqs2 taxonomy.
+
+        The output is a two-column TSV: ``accession<TAB>taxid``. Both versioned
+        (``accession.version``) and unversioned accessions are emitted, then
+        deduplicated via ``sort -u``.
+        """
+        unsorted_mapping = mapping_file.with_suffix(".unsorted.tsv")
+        try:
+            with open(unsorted_mapping, "w") as out:
+                for gz_file in sorted(acc2taxid_dir.glob("nucl_*.accession2taxid.gz")):
+                    with gzip.open(gz_file, "rt", newline="") as infile:
+                        reader = csv.reader(infile, delimiter="\t")
+                        for row in reader:
+                            if len(row) < 3:
+                                continue
+                            if row[0] == "accession":
+                                continue
+                            accession, accession_version, taxid = row[0], row[1], row[2]
+                            if not taxid.isdigit():
+                                continue
+                            # MMseqs2 lookups can use either versioned or
+                            # unversioned accessions depending on how the
+                            # database was created; emit both for coverage.
+                            out.write(f"{accession_version}\t{taxid}\n")
+                            out.write(f"{accession}\t{taxid}\n")
+
+            result = subprocess.run(
+                ["sort", "-u", str(unsorted_mapping), "-o", str(mapping_file)],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                stderr = result.stderr.strip() if result.stderr else "unknown error"
+                return False, f"Failed to sort mapping file: {stderr}"
+        except (OSError, ValueError, gzip.BadGzipFile) as e:
+            return False, f"Failed to create taxonomy mapping file: {e}"
+        finally:
+            if unsorted_mapping.exists():
+                unsorted_mapping.unlink()
+
+        return True, ""
+
+    def add_taxonomy_to_database(
+        self,
+        mmseqs_db: Path,
+        ncbi_taxonomy: Path,
+        threads: int = 1,
+        acc2taxid_dir: Optional[Path] = None,
+        taxonomy_workdir: Optional[Path] = None
+    ) -> Tuple[bool, str]:
+        """Add NCBI taxonomy sidecar files to an MMseqs2 NT database.
+
+        Args:
+            mmseqs_db: Path to MMseqs2 NT database base file (e.g. ``.../NT``).
+            ncbi_taxonomy: Directory with NCBI taxonomy dump files.
+            threads: Number of threads for ``mmseqs createtaxdb``.
+            acc2taxid_dir: Optional directory with accession2taxid files.
+            taxonomy_workdir: Optional working directory for mapping files.
+
+        Returns:
+            Tuple ``(success, message)``.
+
+        Side effects:
+            Creates mapping files in ``taxonomy_workdir`` and writes MMseqs2
+            taxonomy sidecar files adjacent to ``mmseqs_db``.
+        """
+        db_ok, db_error = self._validate_mmseqs_database(mmseqs_db)
+        if not db_ok:
+            return False, db_error
+
+        taxonomy_ok, taxonomy_error = self._validate_taxonomy_dump(ncbi_taxonomy)
+        if not taxonomy_ok:
+            return False, taxonomy_error
+
+        resolved_acc2taxid = self._resolve_acc2taxid_dir(ncbi_taxonomy, acc2taxid_dir)
+        ensure_ok, ensure_error = self._ensure_accession2taxid_files(resolved_acc2taxid)
+        if not ensure_ok:
+            return False, ensure_error
+
+        workdir = taxonomy_workdir if taxonomy_workdir is not None else (mmseqs_db.parent / "taxonomy_build")
+        workdir.mkdir(parents=True, exist_ok=True)
+        mapping_file = workdir / "nt.accession2taxid.mmseqs.tsv"
+        map_ok, map_error = self._build_tax_mapping_file(resolved_acc2taxid, mapping_file)
+        if not map_ok:
+            return False, map_error
+
+        with tempfile.TemporaryDirectory(prefix="mmseqs_tax_tmp_", dir=str(workdir)) as tmp_dir:
+            cmd = [
+                "mmseqs",
+                "createtaxdb",
+                str(mmseqs_db),
+                tmp_dir,
+                "--ncbi-tax-dump",
+                str(ncbi_taxonomy),
+                "--tax-mapping-file",
+                str(mapping_file),
+                "--threads",
+                str(threads),
+            ]
+            success, error = self._run_command(cmd, "MMseqs2 taxonomy creation failed")
+            if not success:
+                return False, error
+
+        return True, f"MMseqs2 taxonomy files created for database {mmseqs_db}"
+
+
+def setup_mmseqs_database(
+    force_download: bool = False,
+    threads: int = 1,
+    db_dir: Optional[Path] = None
+) -> Tuple[bool, str, Optional[Path]]:
+    """Convenience function to download MMseqs2 NT database."""
+    downloader = MMseqsDownloader(db_dir=db_dir)
+    return downloader.download_nt_database(force_download=force_download, threads=threads)
+
+
+def setup_mmseqs_taxonomy(
+    mmseqs_db: Path,
+    ncbi_taxonomy: Path,
+    threads: int = 1,
+    acc2taxid_dir: Optional[Path] = None,
+    taxonomy_workdir: Optional[Path] = None,
+    db_dir: Optional[Path] = None
+) -> Tuple[bool, str]:
+    """Convenience function to add taxonomy to an MMseqs2 database."""
+    downloader = MMseqsDownloader(db_dir=db_dir)
+    return downloader.add_taxonomy_to_database(
+        mmseqs_db=mmseqs_db,
+        ncbi_taxonomy=ncbi_taxonomy,
+        threads=threads,
+        acc2taxid_dir=acc2taxid_dir,
+        taxonomy_workdir=taxonomy_workdir
+    )

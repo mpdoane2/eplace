@@ -10,7 +10,14 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 import pytest
 
-from eplace_lib.ncbi_download import NCBIDownloader, setup_ncbi_database
+from eplace_lib.ncbi_download import (
+    NCBIDownloader,
+    MMseqsDownloader,
+    setup_ncbi_database,
+    setup_mmseqs_database,
+    setup_mmseqs_taxonomy,
+    check_available_memory_gb
+)
 
 
 class TestNCBIDownloader:
@@ -279,3 +286,78 @@ class TestSetupNCBIDatabase:
         
         assert success is True
         mock_setup.assert_called_once_with(False, False)
+
+
+class TestMMseqsDownloader:
+    """Test cases for MMseqsDownloader class and helpers."""
+
+    def test_get_mmseqsdb_directory_with_preferred_env(self):
+        """MMSEQS_DB_DIR should be used when present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {'MMSEQS_DB_DIR': tmpdir}, clear=True):
+                downloader = MMseqsDownloader()
+                assert downloader.get_mmseqsdb_directory() == Path(tmpdir)
+
+    def test_get_mmseqsdb_directory_with_legacy_env(self):
+        """MMSEQS2DB should be used as a fallback when MMSEQS_DB_DIR is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {'MMSEQS2DB': tmpdir}, clear=True):
+                downloader = MMseqsDownloader()
+                assert downloader.get_mmseqsdb_directory() == Path(tmpdir)
+
+    def test_get_mmseqsdb_directory_creates_missing_path(self):
+        """Resolved MMseqs directory should be created when missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = Path(tmpdir) / "missing_mmseqs_db_dir"
+            with patch.dict(os.environ, {'MMSEQS_DB_DIR': str(missing)}, clear=True):
+                downloader = MMseqsDownloader()
+                resolved = downloader.get_mmseqsdb_directory()
+                assert resolved == missing
+                assert resolved.exists()
+
+    @patch('eplace_lib.ncbi_download.MMseqsDownloader.download_nt_database')
+    def test_setup_mmseqs_database(self, mock_download):
+        """setup_mmseqs_database delegates to MMseqsDownloader."""
+        mock_path = Path("/tmp/mock_mmseqs/NT.20260515/NT")
+        mock_download.return_value = (True, "Success", mock_path)
+
+        success, message, db_path = setup_mmseqs_database(force_download=True, threads=4, db_dir=Path("/tmp/mock_mmseqs"))
+
+        assert success is True
+        assert message == "Success"
+        assert db_path == mock_path
+        mock_download.assert_called_once_with(force_download=True, threads=4)
+
+    @patch('eplace_lib.ncbi_download.MMseqsDownloader.add_taxonomy_to_database')
+    def test_setup_mmseqs_taxonomy(self, mock_taxonomy):
+        """setup_mmseqs_taxonomy delegates to MMseqsDownloader."""
+        mock_taxonomy.return_value = (True, "Taxonomy ready")
+        mmseqs_db = Path("/tmp/mmseqs/NT.20260515/NT")
+        ncbi_taxonomy = Path("/tmp/ncbi_taxonomy")
+
+        success, message = setup_mmseqs_taxonomy(
+            mmseqs_db=mmseqs_db,
+            ncbi_taxonomy=ncbi_taxonomy,
+            threads=8,
+            acc2taxid_dir=Path("/tmp/acc2taxid"),
+            taxonomy_workdir=Path("/tmp/workdir"),
+            db_dir=Path("/tmp/mmseqs")
+        )
+
+        assert success is True
+        assert message == "Taxonomy ready"
+        mock_taxonomy.assert_called_once_with(
+            mmseqs_db=mmseqs_db,
+            ncbi_taxonomy=ncbi_taxonomy,
+            threads=8,
+            acc2taxid_dir=Path("/tmp/acc2taxid"),
+            taxonomy_workdir=Path("/tmp/workdir")
+        )
+
+    @patch('eplace_lib.ncbi_download.get_total_memory_gb')
+    def test_check_available_memory_gb(self, mock_total_memory):
+        """check_available_memory_gb should compare against requirement."""
+        mock_total_memory.return_value = 96.0
+        ok, total = check_available_memory_gb(64.0)
+        assert ok is True
+        assert total == 96.0

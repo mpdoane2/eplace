@@ -548,11 +548,29 @@ class TestMMseqs2Runner:
             assert runner.db_path == Path.home() / "mmseqs2db"
 
     def test_init_with_env_var(self):
-        """Test MMseqs2Runner initialization with MMSEQS2DB env var."""
+        """Test MMseqs2Runner initialization with MMSEQS_DB_DIR env var."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict('os.environ', {'MMSEQS2DB': tmpdir}):
+            with patch.dict('os.environ', {'MMSEQS_DB_DIR': tmpdir}):
                 runner = MMseqs2Runner()
                 assert runner.db_path == Path(tmpdir)
+
+    def test_init_with_legacy_env_var(self):
+        """Test MMseqs2Runner initialization with legacy MMSEQS2DB env var."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict('os.environ', {'MMSEQS2DB': tmpdir}, clear=True):
+                runner = MMseqs2Runner()
+                assert runner.db_path == Path(tmpdir)
+
+    def test_init_prefers_mmseqs_db_dir_over_legacy(self):
+        """Test MMSEQS_DB_DIR takes precedence over MMSEQS2DB when both are set."""
+        with tempfile.TemporaryDirectory() as preferred, tempfile.TemporaryDirectory() as legacy:
+            with patch.dict(
+                'os.environ',
+                {'MMSEQS_DB_DIR': preferred, 'MMSEQS2DB': legacy},
+                clear=True
+            ):
+                runner = MMseqs2Runner()
+                assert runner.db_path == Path(preferred)
 
     def test_init_with_path(self):
         """Test MMseqs2Runner initialization with explicit path."""
