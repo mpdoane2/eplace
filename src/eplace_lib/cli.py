@@ -14,7 +14,12 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from collections import defaultdict
 
-from .ncbi_download import setup_ncbi_database
+from .ncbi_download import (
+    setup_ncbi_database,
+    setup_mmseqs_database,
+    setup_mmseqs_taxonomy,
+    check_available_memory_gb
+)
 from .blast_analysis import run_blast_search, run_mmseqs_search, FastaReader
 from .taxonomy import (
     process_blast_results_for_taxonomy,
@@ -36,6 +41,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+MMSEQS_DOWNLOAD_MIN_MEMORY_GB = 64.0
+MMSEQS_TAXONOMY_MIN_MEMORY_GB = 128.0
 
 
 def _get_cli_version() -> str:
@@ -127,7 +135,8 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
     if not args.mmseqs_db_path:
         logger.warning(
             "No --mmseqs-db-path provided. The MMseqs2 database directory "
-            "will be resolved from $MMSEQS2DB or ~/mmseqs2db. For "
+            "will be resolved from $MMSEQS_DB_DIR, then $MMSEQS2DB, or "
+            "~/mmseqs2db. For "
             "reproducibility, explicitly specify --mmseqs-db-path pointing "
             "to a database built from the same sequence universe as BLAST "
             "core_nt."
@@ -180,16 +189,75 @@ def download_command(args):
     logger.info("=" * 60)
     logger.info("ePLACE Database Download")
     logger.info("=" * 60)
-    
-    # Download the database
-    success, message = setup_ncbi_database(force_download=args.force)
-    
-    if success:
-        logger.info(f"✓ {message}")
-        return 0
-    else:
-        logger.error(f"✗ {message}")
+
+    if args.add_taxonomy and args.target == "blast":
+        logger.error("--add-taxonomy is only valid when --target is mmseqs2 or both")
         return 1
+
+    if args.target in ("blast", "both"):
+        success, message = setup_ncbi_database(force_download=args.force)
+        if not success:
+            logger.error(f"✗ {message}")
+            return 1
+        logger.info(f"✓ {message}")
+
+    mmseqs_db = None
+    if args.target in ("mmseqs2", "both"):
+        if not args.skip_memory_check:
+            enough_memory, available_memory_gb = check_available_memory_gb(MMSEQS_DOWNLOAD_MIN_MEMORY_GB)
+            if not enough_memory:
+                logger.error(
+                    "MMseqs2 NT database download requires at least %.0f GiB RAM "
+                    "(detected %.1f GiB). Use --skip-memory-check to override.",
+                    MMSEQS_DOWNLOAD_MIN_MEMORY_GB,
+                    available_memory_gb
+                )
+                return 1
+
+        success, message, mmseqs_db = setup_mmseqs_database(
+            force_download=args.force,
+            threads=args.mmseqs_threads,
+            db_dir=args.mmseqs_db_dir
+        )
+        if not success:
+            logger.error(f"✗ {message}")
+            return 1
+        logger.info(f"✓ {message}")
+
+        if args.add_taxonomy:
+            if not args.ncbi_taxonomy:
+                logger.error("--ncbi-taxonomy is required when --add-taxonomy is used")
+                return 1
+
+            if mmseqs_db is None:
+                logger.error("Unable to resolve MMseqs2 NT database path for taxonomy integration")
+                return 1
+
+            if not args.skip_memory_check:
+                enough_memory, available_memory_gb = check_available_memory_gb(MMSEQS_TAXONOMY_MIN_MEMORY_GB)
+                if not enough_memory:
+                    logger.error(
+                        "MMseqs2 taxonomy integration requires at least %.0f GiB RAM "
+                        "(detected %.1f GiB). Use --skip-memory-check to override.",
+                        MMSEQS_TAXONOMY_MIN_MEMORY_GB,
+                        available_memory_gb
+                    )
+                    return 1
+
+            success, message = setup_mmseqs_taxonomy(
+                mmseqs_db=mmseqs_db,
+                ncbi_taxonomy=args.ncbi_taxonomy,
+                threads=args.mmseqs_threads,
+                acc2taxid_dir=args.acc2taxid_dir,
+                taxonomy_workdir=args.taxonomy_workdir,
+                db_dir=args.mmseqs_db_dir
+            )
+            if not success:
+                logger.error(f"✗ {message}")
+                return 1
+            logger.info(f"✓ {message}")
+
+    return 0
 
 
 def blast_command(args):
@@ -233,7 +301,10 @@ def blast_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info(f"Search backend: mmseqs2")
         logger.info(f"MMseqs2 database name: {mmseqs_database}")
-        logger.info(f"MMseqs2 database path: {args.mmseqs_db_path or '(default: $MMSEQS2DB or ~/mmseqs2db)'}")
+        logger.info(
+            "MMseqs2 database path: %s",
+            args.mmseqs_db_path or "(default: $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db)"
+        )
         logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
         _log_mmseqs_database_warnings(args, mmseqs_database)
     else:
@@ -671,7 +742,10 @@ def grouped_command(args):
     if args.search_tool == 'mmseqs2':
         logger.info(f"Search backend: mmseqs2")
         logger.info(f"MMseqs2 database name: {mmseqs_database}")
-        logger.info(f"MMseqs2 database path: {args.mmseqs_db_path or '(default: $MMSEQS2DB or ~/mmseqs2db)'}")
+        logger.info(
+            "MMseqs2 database path: %s",
+            args.mmseqs_db_path or "(default: $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db)"
+        )
         logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
         _log_mmseqs_database_warnings(args, mmseqs_database)
     else:
@@ -1081,27 +1155,81 @@ Documentation: https://github.com/linsalrob/eplace
     # Download subcommand
     download_parser = subparsers.add_parser(
         'download',
-        help='Download NCBI BLAST database',
-        description='Download and setup the NCBI core_nt BLAST database',
+        help='Download BLAST and/or MMseqs2 databases',
+        description='Download and setup NCBI core_nt BLAST and MMseqs2 NT databases',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Download database to default location ($BLASTDB or ~/blastdb)
+  # Download BLAST core_nt database to default location ($BLASTDB or ~/blastdb)
   eplace download
   
-  # Force redownload even if database exists
+  # Download MMseqs2 NT database to $MMSEQS_DB_DIR (or fallback path)
+  eplace download --target mmseqs2 --mmseqs-db-dir /path/to/mmseqs_db
+
+  # Download MMseqs2 NT and add taxonomy sidecar files
+  eplace download --target mmseqs2 --add-taxonomy --ncbi-taxonomy /path/to/ncbi/taxonomy/current
+
+  # Force redownload even if database exists (applies to selected target)
   eplace download --force
 
 Notes:
-  - The download is large (several GB) and may take time
-  - Database will be stored in $BLASTDB if set, otherwise ~/blastdb
-  - MD5 checksums are verified automatically
+  - BLAST DB location uses $BLASTDB or ~/blastdb
+  - MMseqs2 DB location uses $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db
+  - MMseqs2 NT download typically requires at least 64 GiB RAM
+  - MMseqs2 taxonomy integration typically requires at least 128 GiB RAM
         """
+    )
+    download_parser.add_argument(
+        '--target',
+        type=str,
+        default='blast',
+        choices=['blast', 'mmseqs2', 'both'],
+        help='Database backend to download (default: blast)'
     )
     download_parser.add_argument(
         '--force',
         action='store_true',
         help='Force redownload even if database exists'
+    )
+    download_parser.add_argument(
+        '--mmseqs-db-dir',
+        type=Path,
+        default=None,
+        help='Path to MMseqs2 database root directory for NT downloads'
+    )
+    download_parser.add_argument(
+        '--mmseqs-threads',
+        type=int,
+        default=1,
+        help='Number of threads for MMseqs2 download/taxonomy commands (default: 1)'
+    )
+    download_parser.add_argument(
+        '--add-taxonomy',
+        action='store_true',
+        help='Add NCBI taxonomy sidecar files to MMseqs2 NT after download'
+    )
+    download_parser.add_argument(
+        '--ncbi-taxonomy',
+        type=Path,
+        default=None,
+        help='Path to NCBI taxonomy dump directory containing nodes.dmp, names.dmp, merged.dmp'
+    )
+    download_parser.add_argument(
+        '--acc2taxid-dir',
+        type=Path,
+        default=None,
+        help='Path to accession2taxid files (defaults to $ACC2TAXID_DIR or <ncbi-taxonomy>/accession2taxid)'
+    )
+    download_parser.add_argument(
+        '--taxonomy-workdir',
+        type=Path,
+        default=None,
+        help='Working directory for MMseqs2 taxonomy mapping files'
+    )
+    download_parser.add_argument(
+        '--skip-memory-check',
+        action='store_true',
+        help='Skip RAM preflight checks for MMseqs2 download and taxonomy integration'
     )
     _add_log_level_argument(download_parser)
     
@@ -1221,7 +1349,7 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db. '
+             'If not provided, falls back to $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db. '
              'For results comparable with BLAST, this directory should contain '
              'a database built from the same sequence universe as core_nt.'
     )
@@ -1402,7 +1530,7 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS2DB or ~/mmseqs2db. '
+             'If not provided, falls back to $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db. '
              'For results comparable with BLAST, this directory should contain '
              'a database built from the same sequence universe as core_nt.'
     )

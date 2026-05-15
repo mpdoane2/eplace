@@ -16,7 +16,14 @@ __author__ = "Rob Edwards"
 
 # Import main classes for convenient access
 from .sequences import SequenceAnalyzer
-from .ncbi_download import NCBIDownloader, setup_ncbi_database
+from .ncbi_download import (
+    NCBIDownloader,
+    MMseqsDownloader,
+    setup_ncbi_database,
+    setup_mmseqs_database,
+    setup_mmseqs_taxonomy,
+    check_available_memory_gb
+)
 from .blast_analysis import (
     BlastHit,
     FastaReader,
@@ -50,7 +57,11 @@ from .alignment import (
 __all__ = [
     "SequenceAnalyzer",
     "NCBIDownloader",
+    "MMseqsDownloader",
     "setup_ncbi_database",
+    "setup_mmseqs_database",
+    "setup_mmseqs_taxonomy",
+    "check_available_memory_gb",
     "BlastHit",
     "FastaReader",
     "BlastRunner",

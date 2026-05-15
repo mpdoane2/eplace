@@ -210,20 +210,30 @@ The `eplace` command provides four subcommands:
 
 ### eplace download
 
-Download and setup the NCBI core_nt BLAST database.
+Download and setup the NCBI core_nt BLAST database and/or MMseqs2 NT database.
 
 **Usage:**
 ```bash
-eplace download [--force]
+eplace download [--target {blast,mmseqs2,both}] [--force] [MMSEQS_OPTIONS]
 ```
 
 **Options:**
+- `--target {blast,mmseqs2,both}`: Which backend database(s) to download (default: `blast`)
 - `--force`: Force redownload even if database exists
+- `--mmseqs-db-dir PATH`: MMseqs2 database root directory (default: `$MMSEQS_DB_DIR`, then `$MMSEQS2DB`, or `~/mmseqs2db`)
+- `--mmseqs-threads INT`: Threads for MMseqs2 download/taxonomy steps
+- `--add-taxonomy`: Build MMseqs2 taxonomy sidecar files (`mmseqs createtaxdb`) after NT download
+- `--ncbi-taxonomy PATH`: Path to NCBI taxonomy dump containing `nodes.dmp`, `names.dmp`, `merged.dmp` (required with `--add-taxonomy`)
+- `--acc2taxid-dir PATH`: Path to accession2taxid files (defaults to `$ACC2TAXID_DIR` or `<ncbi-taxonomy>/accession2taxid`)
+- `--taxonomy-workdir PATH`: Working directory for MMseqs taxonomy mapping files
+- `--skip-memory-check`: Skip MMseqs2 RAM preflight checks
 
 **Notes:**
 - Database will be stored in `$BLASTDB` if set, otherwise `~/blastdb`
-- The download is large (several GB) and may take time
-- MD5 checksums are verified automatically
+- MMseqs2 database is stored in `$MMSEQS_DB_DIR`, then `$MMSEQS2DB`, or `~/mmseqs2db`
+- MMseqs2 NT download typically requires at least 64 GiB RAM
+- MMseqs2 taxonomy integration typically requires at least 128 GiB RAM
+- Downloads are large and may take time
 
 ### eplace search
 

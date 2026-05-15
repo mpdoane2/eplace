@@ -291,7 +291,7 @@ def test_cli_log_level_in_all_subparsers():
     expected_parsers = {
         'parser',
         'download_parser',
-        'blast_parser',
+        'search_parser',
         'grouped_parser',
         'relabel_parser',
     }
@@ -328,7 +328,7 @@ def test_cli_has_mmseqs_db_source_argument():
         if has_db_source and isinstance(func.value, ast.Name):
             db_source_parsers.add(func.value.id)
 
-    expected = {'blast_parser', 'grouped_parser'}
+    expected = {'search_parser', 'grouped_parser'}
     missing = expected - db_source_parsers
     assert not missing, (
         f"--mmseqs-db-source argument missing from: {sorted(missing)}"
@@ -357,11 +357,45 @@ def test_cli_has_blast_db_source_argument():
         if has_db_source and isinstance(func.value, ast.Name):
             db_source_parsers.add(func.value.id)
 
-    expected = {'blast_parser', 'grouped_parser'}
+    expected = {'search_parser', 'grouped_parser'}
     missing = expected - db_source_parsers
     assert not missing, (
         f"--blast-db-source argument missing from: {sorted(missing)}"
     )
+
+
+def test_cli_has_mmseqs_download_arguments():
+    """Test that download parser includes MMseqs2 download and taxonomy flags."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    expected = {
+        '--target',
+        '--mmseqs-db-dir',
+        '--mmseqs-threads',
+        '--add-taxonomy',
+        '--ncbi-taxonomy',
+        '--acc2taxid-dir',
+        '--taxonomy-workdir',
+        '--skip-memory-check',
+    }
+    found = set()
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Attribute) and node.func.attr == 'add_argument'):
+            continue
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                if arg.value in expected:
+                    found.add(arg.value)
+
+    missing = expected - found
+    assert not missing, f"MMseqs download arguments missing from CLI: {sorted(missing)}"
 
 
 def test_cli_has_write_search_metadata_function():
@@ -404,7 +438,12 @@ def _load_cli_module_for_testing():
     stubs = {
         'pytaxonkit': MagicMock(),
         'eplace_lib': MagicMock(),
-        'eplace_lib.ncbi_download': MagicMock(setup_ncbi_database=MagicMock()),
+        'eplace_lib.ncbi_download': MagicMock(
+            setup_ncbi_database=MagicMock(),
+            setup_mmseqs_database=MagicMock(),
+            setup_mmseqs_taxonomy=MagicMock(),
+            check_available_memory_gb=MagicMock(return_value=(True, 256.0))
+        ),
         'eplace_lib.blast_analysis': MagicMock(),
         'eplace_lib.taxonomy': MagicMock(),
         'eplace_lib.alignment': MagicMock(),
@@ -577,6 +616,7 @@ if __name__ == '__main__':
         test_cli_log_level_in_all_subparsers,
         test_cli_has_mmseqs_db_source_argument,
         test_cli_has_blast_db_source_argument,
+        test_cli_has_mmseqs_download_arguments,
         test_cli_has_write_search_metadata_function,
         test_cli_write_search_metadata_writes_json,
         test_cli_write_search_metadata_mmseqs2,

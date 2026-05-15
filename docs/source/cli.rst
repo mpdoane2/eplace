@@ -37,39 +37,80 @@ Commands Overview
 eplace download
 ---------------
 
-Download and setup the NCBI core_nt BLAST database.
+Download and setup the NCBI core_nt BLAST database and/or MMseqs2 NT database.
 
 Usage
 ~~~~~
 
 .. code-block:: bash
 
-   eplace download [--force]
+   eplace download [--target {blast,mmseqs2,both}] [--force] [MMSEQS_OPTIONS]
 
 Options
 ~~~~~~~
 
+.. option:: --target {blast,mmseqs2,both}
+
+   Database backend(s) to download
+
+   Default: ``blast``
+
 .. option:: --force
 
    Force redownload even if database exists
+
+.. option:: --mmseqs-db-dir PATH
+
+   Path to MMseqs2 database root directory. Defaults to ``$MMSEQS_DB_DIR``,
+   then ``$MMSEQS2DB``, then ``~/mmseqs2db``.
+
+.. option:: --mmseqs-threads INT
+
+   Number of threads for MMseqs2 download/taxonomy commands
+
+.. option:: --add-taxonomy
+
+   Add taxonomy sidecar files to MMseqs2 NT database after download.
+
+.. option:: --ncbi-taxonomy PATH
+
+   Path to NCBI taxonomy dump directory containing ``nodes.dmp``,
+   ``names.dmp``, and ``merged.dmp``. Required with ``--add-taxonomy``.
+
+.. option:: --acc2taxid-dir PATH
+
+   Path to accession2taxid files. Defaults to ``$ACC2TAXID_DIR`` or
+   ``<ncbi-taxonomy>/accession2taxid``.
+
+.. option:: --taxonomy-workdir PATH
+
+   Working directory for MMseqs taxonomy mapping files.
+
+.. option:: --skip-memory-check
+
+   Skip RAM preflight checks for MMseqs2 download/taxonomy.
 
 Examples
 ~~~~~~~~
 
 .. code-block:: bash
 
-   # Download database to default location ($BLASTDB or ~/blastdb)
+   # Download BLAST database to default location ($BLASTDB or ~/blastdb)
    eplace download
 
-   # Force redownload
-   eplace download --force
+   # Download MMseqs2 NT database
+   eplace download --target mmseqs2 --mmseqs-db-dir /path/to/mmseqs_db
+
+   # Download MMseqs2 NT database and add taxonomy sidecar files
+   eplace download --target mmseqs2 --add-taxonomy --ncbi-taxonomy /path/to/ncbi/taxonomy/current
 
 Notes
 ~~~~~
 
-* The download is large (several GB) and may take time
-* Database will be stored in ``$BLASTDB`` if set, otherwise ``~/blastdb``
-* MD5 checksums are verified automatically
+* BLAST DB location: ``$BLASTDB`` or ``~/blastdb``
+* MMseqs2 DB location: ``$MMSEQS_DB_DIR``, then ``$MMSEQS2DB``, or ``~/mmseqs2db``
+* MMseqs2 NT download typically requires at least 64 GiB RAM
+* MMseqs2 taxonomy integration typically requires at least 128 GiB RAM
 
 eplace search
 ------------

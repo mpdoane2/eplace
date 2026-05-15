@@ -571,12 +571,13 @@ class MMseqs2Runner:
 
         Args:
             db_path: Path to the MMseqs2 database directory. If None the
-                ``MMSEQS2DB`` environment variable is used; if that is also
-                unset the directory ``~/mmseqs2db`` is used.
+                ``MMSEQS_DB_DIR`` environment variable is used; if unset,
+                ``MMSEQS2DB`` is used as a legacy fallback; if both are unset,
+                the directory ``~/mmseqs2db`` is used.
         """
         self.db_path = db_path
         if self.db_path is None:
-            mmseqs_env = os.environ.get('MMSEQS2DB')
+            mmseqs_env = os.environ.get('MMSEQS_DB_DIR') or os.environ.get('MMSEQS2DB')
             if mmseqs_env:
                 self.db_path = Path(mmseqs_env)
             else:
