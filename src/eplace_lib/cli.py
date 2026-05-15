@@ -271,7 +271,8 @@ def blast_command(args):
                 db_path=args.mmseqs_db_path,
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
-                skip_existing=skip_existing
+                skip_existing=skip_existing,
+                search_type=args.mmseqs_search_type
             )
 
             if not success:
@@ -708,7 +709,8 @@ def grouped_command(args):
                 db_path=args.mmseqs_db_path,
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
-                skip_existing=skip_existing
+                skip_existing=skip_existing,
+                search_type=args.mmseqs_search_type
             )
 
             if not success:
@@ -1243,6 +1245,14 @@ Notes:
              'Only used when --search-tool mmseqs2 is specified.'
     )
     search_parser.add_argument(
+        '--mmseqs-search-type',
+        type=int,
+        default=3,
+        help='MMseqs2 search type: 2 (translated), 3 (nucleotide), '
+             '4 (translated nucleotide backtrace). Default is 3 (nucleotide). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    search_parser.add_argument(
         '--overwrite-existing-blast',
         action='store_true',
         help='Overwrite existing search results'
@@ -1411,6 +1421,14 @@ Notes:
         type=float,
         default=5.7,
         help='MMseqs2 sensitivity setting, 1–7.5 (default: 5.7). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-search-type',
+        type=int,
+        default=3,
+        help='MMseqs2 search type: 2 (translated), 3 (nucleotide), '
+             '4 (translated nucleotide backtrace). Default is 3 (nucleotide). '
              'Only used when --search-tool mmseqs2 is specified.'
     )
     grouped_parser.add_argument(
