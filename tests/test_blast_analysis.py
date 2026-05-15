@@ -14,6 +14,7 @@ from eplace_lib.blast_analysis import (
     run_blast_search,
     MMseqs2Runner,
     run_mmseqs_search,
+    validate_mmseqs_memory_limit,
     normalize_sequence_id,
     _extract_accession_from_pipe_id,
 )
@@ -854,3 +855,162 @@ class TestRunMMseqsSearch:
                     output_file=output_file,
                     sensitivity=8.0
                 )
+
+
+class TestValidateMmseqsMemoryLimit:
+    """Test cases for validate_mmseqs_memory_limit."""
+
+    def test_valid_gigabyte(self):
+        """Test valid gigabyte memory strings."""
+        assert validate_mmseqs_memory_limit("400G") == "400G"
+        assert validate_mmseqs_memory_limit("128G") == "128G"
+        assert validate_mmseqs_memory_limit("64G") == "64G"
+
+    def test_valid_terabyte(self):
+        """Test valid terabyte memory string."""
+        assert validate_mmseqs_memory_limit("1T") == "1T"
+        assert validate_mmseqs_memory_limit("800T") == "800T"
+
+    def test_valid_megabyte(self):
+        """Test valid megabyte memory string."""
+        assert validate_mmseqs_memory_limit("512M") == "512M"
+
+    def test_valid_kilobyte(self):
+        """Test valid kilobyte memory string."""
+        assert validate_mmseqs_memory_limit("1024K") == "1024K"
+
+    def test_empty_string_raises(self):
+        """Test that an empty string raises ValueError."""
+        with pytest.raises(ValueError, match="must not be empty"):
+            validate_mmseqs_memory_limit("")
+
+    def test_no_unit_raises(self):
+        """Test that a value without a unit raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("400")
+
+    def test_double_unit_raises(self):
+        """Test that 400GB raises ValueError (double unit)."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("400GB")
+
+    def test_text_value_raises(self):
+        """Test that a non-numeric value raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("fourhundredG")
+
+    def test_unit_before_number_raises(self):
+        """Test that unit-before-number raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("G400")
+
+    def test_space_in_value_raises(self):
+        """Test that a value with a space raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("400 G")
+
+    def test_lowercase_unit_raises(self):
+        """Test that lowercase unit raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("400g")
+
+
+class TestRunEasySearchMemoryLimit:
+    """Test that run_easy_search passes --split-memory-limit to the command."""
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.check_mmseqs_available')
+    @patch('subprocess.run')
+    def test_split_memory_limit_included(self, mock_run, mock_check):
+        """Test that split_memory_limit is passed to the mmseqs command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_check.return_value = True
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+            runner = MMseqs2Runner(db_path=tmppath)
+            success = runner.run_easy_search(
+                query_file, output_file, split_memory_limit="400G"
+            )
+
+            assert success is True
+            call_args = mock_run.call_args[0][0]
+            assert '--split-memory-limit' in call_args
+            idx = call_args.index('--split-memory-limit')
+            assert call_args[idx + 1] == '400G'
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.check_mmseqs_available')
+    @patch('subprocess.run')
+    def test_no_split_memory_limit_when_none(self, mock_run, mock_check):
+        """Test that --split-memory-limit is omitted when split_memory_limit is None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_check.return_value = True
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+            runner = MMseqs2Runner(db_path=tmppath)
+            success = runner.run_easy_search(query_file, output_file)
+
+            assert success is True
+            call_args = mock_run.call_args[0][0]
+            assert '--split-memory-limit' not in call_args
+
+
+class TestRunMmseqsSearchMemoryLimit:
+    """Test that run_mmseqs_search forwards memory_limit to run_easy_search."""
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.parse_mmseqs_results')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.filter_hits')
+    def test_memory_limit_forwarded(self, mock_filter, mock_parse, mock_run):
+        """Test that memory_limit is passed through to run_easy_search."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_run.return_value = True
+            mock_parse.return_value = []
+            mock_filter.return_value = []
+
+            run_mmseqs_search(
+                query_fasta=query_file,
+                output_file=output_file,
+                memory_limit="200G"
+            )
+
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get('split_memory_limit') == "200G"
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.parse_mmseqs_results')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.filter_hits')
+    def test_memory_limit_none_by_default(self, mock_filter, mock_parse, mock_run):
+        """Test that memory_limit defaults to None (no split-memory-limit flag)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_run.return_value = True
+            mock_parse.return_value = []
+            mock_filter.return_value = []
+
+            run_mmseqs_search(
+                query_fasta=query_file,
+                output_file=output_file
+            )
+
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get('split_memory_limit') is None

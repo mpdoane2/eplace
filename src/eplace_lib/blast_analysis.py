@@ -611,7 +611,8 @@ class MMseqs2Runner:
         evalue: float = 1e-5,
         sensitivity: float = 5.7,
         tmp_dir: Optional[Path] = None,
-        search_type: int = 3
+        search_type: int = 3,
+        split_memory_limit: Optional[str] = None
     ) -> bool:
         """
         Run an MMseqs2 easy-search.
@@ -640,6 +641,10 @@ class MMseqs2Runner:
                 3 (nucleotide), 4 (translated nucleotide backtrace).
                 Default is 3 (nucleotide). See MMseqs2 documentation for all
                 valid values.
+            split_memory_limit: Maximum RAM for the MMseqs2 prefilter/index
+                step, passed as ``--split-memory-limit`` to ``easy-search``
+                (e.g. ``"400G"``).  When ``None`` the flag is omitted and
+                MMseqs2 uses its own default.
 
         Returns:
             True if MMseqs2 ran successfully, False otherwise
@@ -681,6 +686,9 @@ class MMseqs2Runner:
             '-s', str(sensitivity),
             '--search-type', str(search_type)
         ]
+
+        if split_memory_limit is not None:
+            cmd.extend(['--split-memory-limit', split_memory_limit])
 
         logger.info(f"Running MMseqs2 search: {' '.join(cmd)}")
 
@@ -836,6 +844,38 @@ class MMseqs2Runner:
         return filtered_hits
 
 
+import re as _re
+
+
+def validate_mmseqs_memory_limit(value: str) -> str:
+    """Validate a MMseqs2-style memory limit string.
+
+    Accepts an integer followed by a single unit suffix ``K``, ``M``, ``G``,
+    or ``T`` (case-sensitive, no space).  Examples of valid values::
+
+        64G   128G   400G   1T   512M
+
+    Args:
+        value: The memory limit string to validate.
+
+    Returns:
+        The validated string unchanged.
+
+    Raises:
+        ValueError: If the string is empty, missing units, has an invalid
+            unit suffix, or is otherwise malformed.
+    """
+    if not value:
+        raise ValueError("MMseqs2 memory limit must not be empty.")
+    if not _re.fullmatch(r'[0-9]+[KMGT]', value):
+        raise ValueError(
+            f"Invalid MMseqs2 memory limit: '{value}'. "
+            "Expected an integer followed by a unit (K, M, G, or T), "
+            "e.g. '400G' or '1T'."
+        )
+    return value
+
+
 def run_mmseqs_search(
     query_fasta: Path,
     output_file: Path,
@@ -846,7 +886,8 @@ def run_mmseqs_search(
     num_threads: int = 1,
     sensitivity: float = 5.7,
     skip_existing: bool = True,
-    search_type: int = 3
+    search_type: int = 3,
+    memory_limit: Optional[str] = None
 ) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run an MMseqs2 search and return filtered hits.
@@ -874,6 +915,9 @@ def run_mmseqs_search(
             3 (nucleotide), 4 (translated nucleotide backtrace).
             Default is 3 (nucleotide). See MMseqs2 documentation for all
             valid values.
+        memory_limit: Maximum RAM for the MMseqs2 prefilter/index step,
+            passed as ``--split-memory-limit`` to ``easy-search``
+            (e.g. ``"400G"``).  When ``None`` the flag is omitted.
 
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])
@@ -899,7 +943,8 @@ def run_mmseqs_search(
             database=database,
             num_threads=num_threads,
             sensitivity=sensitivity,
-            search_type=search_type
+            search_type=search_type,
+            split_memory_limit=memory_limit
         )
 
         if not success:

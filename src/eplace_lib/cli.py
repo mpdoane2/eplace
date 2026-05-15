@@ -20,7 +20,7 @@ from .ncbi_download import (
     setup_mmseqs_taxonomy,
     check_available_memory_gb
 )
-from .blast_analysis import run_blast_search, run_mmseqs_search, FastaReader
+from .blast_analysis import run_blast_search, run_mmseqs_search, validate_mmseqs_memory_limit, FastaReader
 from .taxonomy import (
     process_blast_results_for_taxonomy,
     rewrite_blast_hits,
@@ -45,6 +45,29 @@ logger = logging.getLogger(__name__)
 MMSEQS_DOWNLOAD_MIN_MEMORY_GB = 64.0
 MMSEQS_TAXONOMY_MIN_MEMORY_GB = 128.0
 MMSEQS_DB_PATH_FALLBACK_MSG = "$MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db"
+
+
+def _mmseqs_memory_limit_type(value: str) -> str:
+    """Argparse type for ``--mmseqs-memory-limit``.
+
+    Delegates to :func:`~eplace_lib.blast_analysis.validate_mmseqs_memory_limit`
+    and converts ``ValueError`` into ``argparse.ArgumentTypeError`` so that the
+    full error message is shown to the user.
+
+    Args:
+        value: Raw string value from the command line.
+
+    Returns:
+        The validated memory limit string unchanged.
+
+    Raises:
+        argparse.ArgumentTypeError: If ``value`` is not a valid MMseqs2
+            memory limit string.
+    """
+    try:
+        return validate_mmseqs_memory_limit(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _get_cli_version() -> str:
@@ -121,6 +144,9 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
     - ``--mmseqs-db-path`` (falling back to environment / home directory)
     - ``--mmseqs-db-source`` (no provenance label provided)
 
+    Also warns when the configured database path or name looks like the full
+    NCBI NT database, which requires hundreds of GB of RAM.
+
     Args:
         args: Parsed argument namespace from argparse.
         mmseqs_database: The effective MMseqs2 database name (after fallback).
@@ -148,6 +174,22 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
             "provenance of your MMseqs2 database (e.g. "
             "'ncbi_core_nt_derived_mmseqs2') so that results remain "
             "reproducible and comparable with the BLAST workflow."
+        )
+
+    # Warn when the database looks like the full NCBI NT collection.
+    db_path_str = str(args.mmseqs_db_path) if args.mmseqs_db_path else ""
+    _looks_like_nt = (
+        mmseqs_database.upper() == "NT"
+        or mmseqs_database.upper().startswith("NT.")
+        or "/NT" in db_path_str
+        or db_path_str.endswith("/NT")
+    )
+    if _looks_like_nt:
+        logger.warning(
+            "You appear to be searching against the full NCBI NT database. "
+            "This can require hundreds of GB of RAM. "
+            "Consider using --mmseqs-memory-limit 400G or a smaller curated "
+            "16S database (e.g. SILVA, GTDB rRNA, RDP, or NCBI 16S)."
         )
 
 
@@ -344,7 +386,8 @@ def blast_command(args):
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing,
-                search_type=args.mmseqs_search_type
+                search_type=args.mmseqs_search_type,
+                memory_limit=args.mmseqs_memory_limit
             )
 
             if not success:
@@ -785,7 +828,8 @@ def grouped_command(args):
                 num_threads=args.num_threads,
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing,
-                search_type=args.mmseqs_search_type
+                search_type=args.mmseqs_search_type,
+                memory_limit=args.mmseqs_memory_limit
             )
 
             if not success:
@@ -1384,6 +1428,16 @@ Notes:
              'Only used when --search-tool mmseqs2 is specified.'
     )
     search_parser.add_argument(
+        '--mmseqs-memory-limit',
+        type=_mmseqs_memory_limit_type,
+        default='400G',
+        metavar='LIMIT',
+        help='Maximum RAM for the MMseqs2 prefilter step, passed as '
+             '--split-memory-limit to mmseqs easy-search (default: 400G). '
+             'Accepts MMseqs2-style memory strings such as 64G, 400G, or 1T. '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    search_parser.add_argument(
         '--overwrite-existing-blast',
         action='store_true',
         help='Overwrite existing search results'
@@ -1562,6 +1616,16 @@ Notes:
              'Commonly used values: 2 (translated), 3 (nucleotide), '
              '4 (translated nucleotide backtrace). Default is 3 (nucleotide). '
              'See MMseqs2 documentation for all valid values. '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    grouped_parser.add_argument(
+        '--mmseqs-memory-limit',
+        type=_mmseqs_memory_limit_type,
+        default='400G',
+        metavar='LIMIT',
+        help='Maximum RAM for the MMseqs2 prefilter step, passed as '
+             '--split-memory-limit to mmseqs easy-search (default: 400G). '
+             'Accepts MMseqs2-style memory strings such as 64G, 400G, or 1T. '
              'Only used when --search-tool mmseqs2 is specified.'
     )
     grouped_parser.add_argument(

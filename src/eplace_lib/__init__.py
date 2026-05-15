@@ -31,6 +31,7 @@ from .blast_analysis import (
     run_blast_search,
     MMseqs2Runner,
     run_mmseqs_search,
+    validate_mmseqs_memory_limit,
     normalize_sequence_id
 )
 from .taxonomy import (
@@ -68,6 +69,7 @@ __all__ = [
     "run_blast_search",
     "MMseqs2Runner",
     "run_mmseqs_search",
+    "validate_mmseqs_memory_limit",
     "normalize_sequence_id",
     "TaxonomyExtractor",
     "SequenceExtractor",
