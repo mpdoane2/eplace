@@ -329,7 +329,12 @@ def setup_ncbi_database(force_download: bool = False, verbose: bool = True) -> T
 
 
 def get_total_memory_gb() -> float:
-    """Get total system memory in GiB."""
+    """Get total system memory in GiB.
+
+    On Linux this first reads ``/proc/meminfo`` (``MemTotal``). If that is not
+    available, it falls back to POSIX ``os.sysconf``. Returns ``0.0`` when both
+    strategies fail.
+    """
     try:
         with open("/proc/meminfo", "r") as meminfo:
             for line in meminfo:
@@ -337,7 +342,7 @@ def get_total_memory_gb() -> float:
                     parts = line.split()
                     if len(parts) >= 2:
                         total_kb = int(parts[1])
-                        return total_kb / (1024 * 1024)
+                        return total_kb / (1024 ** 2)
     except (OSError, ValueError):
         pass
 
@@ -356,7 +361,16 @@ def check_available_memory_gb(required_gb: float) -> Tuple[bool, float]:
 
 
 class MMseqsDownloader:
-    """Download and configure MMseqs2 NT databases and taxonomy sidecar files."""
+    """Download and configure MMseqs2 NT databases and taxonomy sidecar files.
+
+    Directory resolution for MMseqs2 databases prefers ``$MMSEQS_DB_DIR``, then
+    ``$MMSEQS2DB`` (legacy), then ``~/mmseqs2db``.
+
+    Workflow:
+    1. Download NT with ``mmseqs databases``.
+    2. Optionally fetch accession2taxid files and build mapping TSV.
+    3. Attach taxonomy sidecars with ``mmseqs createtaxdb``.
+    """
 
     MMSEQS_DB_DIR_ENV = "MMSEQS_DB_DIR"
     LEGACY_MMSEQS_DB_DIR_ENV = "MMSEQS2DB"
@@ -465,7 +479,13 @@ class MMseqsDownloader:
         return True, ""
 
     def _resolve_acc2taxid_dir(self, ncbi_taxonomy: Path, acc2taxid_dir: Optional[Path]) -> Path:
-        """Resolve accession2taxid directory from arg, env, or taxonomy path."""
+        """Resolve accession2taxid directory from arg, env, or taxonomy path.
+
+        Resolution order:
+        1. Explicit ``acc2taxid_dir`` argument.
+        2. ``$ACC2TAXID_DIR`` environment variable.
+        3. ``<ncbi_taxonomy>/accession2taxid``.
+        """
         if acc2taxid_dir is not None:
             return acc2taxid_dir
 
@@ -495,7 +515,12 @@ class MMseqsDownloader:
 
     @staticmethod
     def _build_tax_mapping_file(acc2taxid_dir: Path, mapping_file: Path) -> Tuple[bool, str]:
-        """Create accession-to-taxid mapping file for MMseqs2 taxonomy."""
+        """Create accession-to-taxid mapping file for MMseqs2 taxonomy.
+
+        The output is a two-column TSV: ``accession<TAB>taxid``. Both versioned
+        (``accession.version``) and unversioned accessions are emitted, then
+        deduplicated via ``sort -u``.
+        """
         unsorted_mapping = mapping_file.with_suffix(".unsorted.tsv")
         try:
             with open(unsorted_mapping, "w") as out:
@@ -510,6 +535,9 @@ class MMseqsDownloader:
                             accession, accession_version, taxid = row[0], row[1], row[2]
                             if not taxid.isdigit():
                                 continue
+                            # MMseqs2 lookups can use either versioned or
+                            # unversioned accessions depending on how the
+                            # database was created; emit both for coverage.
                             out.write(f"{accession_version}\t{taxid}\n")
                             out.write(f"{accession}\t{taxid}\n")
 
@@ -537,7 +565,22 @@ class MMseqsDownloader:
         acc2taxid_dir: Optional[Path] = None,
         taxonomy_workdir: Optional[Path] = None
     ) -> Tuple[bool, str]:
-        """Add NCBI taxonomy sidecar files to an MMseqs2 NT database."""
+        """Add NCBI taxonomy sidecar files to an MMseqs2 NT database.
+
+        Args:
+            mmseqs_db: Path to MMseqs2 NT database base file (e.g. ``.../NT``).
+            ncbi_taxonomy: Directory with NCBI taxonomy dump files.
+            threads: Number of threads for ``mmseqs createtaxdb``.
+            acc2taxid_dir: Optional directory with accession2taxid files.
+            taxonomy_workdir: Optional working directory for mapping files.
+
+        Returns:
+            Tuple ``(success, message)``.
+
+        Side effects:
+            Creates mapping files in ``taxonomy_workdir`` and writes MMseqs2
+            taxonomy sidecar files adjacent to ``mmseqs_db``.
+        """
         db_ok, db_error = self._validate_mmseqs_database(mmseqs_db)
         if not db_ok:
             return False, db_error

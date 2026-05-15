@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 MMSEQS_DOWNLOAD_MIN_MEMORY_GB = 64.0
 MMSEQS_TAXONOMY_MIN_MEMORY_GB = 128.0
+MMSEQS_DB_PATH_FALLBACK_MSG = "$MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db"
 
 
 def _get_cli_version() -> str:
@@ -135,11 +136,11 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
     if not args.mmseqs_db_path:
         logger.warning(
             "No --mmseqs-db-path provided. The MMseqs2 database directory "
-            "will be resolved from $MMSEQS_DB_DIR, then $MMSEQS2DB, or "
-            "~/mmseqs2db. For "
+            "will be resolved from %s. For "
             "reproducibility, explicitly specify --mmseqs-db-path pointing "
             "to a database built from the same sequence universe as BLAST "
-            "core_nt."
+            "core_nt.",
+            MMSEQS_DB_PATH_FALLBACK_MSG
         )
     if not args.mmseqs_db_source:
         logger.warning(
@@ -204,8 +205,8 @@ def download_command(args):
     mmseqs_db = None
     if args.target in ("mmseqs2", "both"):
         if not args.skip_memory_check:
-            enough_memory, available_memory_gb = check_available_memory_gb(MMSEQS_DOWNLOAD_MIN_MEMORY_GB)
-            if not enough_memory:
+            has_sufficient_memory, available_memory_gb = check_available_memory_gb(MMSEQS_DOWNLOAD_MIN_MEMORY_GB)
+            if not has_sufficient_memory:
                 logger.error(
                     "MMseqs2 NT database download requires at least %.0f GiB RAM "
                     "(detected %.1f GiB). Use --skip-memory-check to override.",
@@ -234,8 +235,8 @@ def download_command(args):
                 return 1
 
             if not args.skip_memory_check:
-                enough_memory, available_memory_gb = check_available_memory_gb(MMSEQS_TAXONOMY_MIN_MEMORY_GB)
-                if not enough_memory:
+                has_sufficient_memory, available_memory_gb = check_available_memory_gb(MMSEQS_TAXONOMY_MIN_MEMORY_GB)
+                if not has_sufficient_memory:
                     logger.error(
                         "MMseqs2 taxonomy integration requires at least %.0f GiB RAM "
                         "(detected %.1f GiB). Use --skip-memory-check to override.",
@@ -303,7 +304,7 @@ def blast_command(args):
         logger.info(f"MMseqs2 database name: {mmseqs_database}")
         logger.info(
             "MMseqs2 database path: %s",
-            args.mmseqs_db_path or "(default: $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db)"
+            args.mmseqs_db_path or f"(default: {MMSEQS_DB_PATH_FALLBACK_MSG})"
         )
         logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
         _log_mmseqs_database_warnings(args, mmseqs_database)
@@ -744,7 +745,7 @@ def grouped_command(args):
         logger.info(f"MMseqs2 database name: {mmseqs_database}")
         logger.info(
             "MMseqs2 database path: %s",
-            args.mmseqs_db_path or "(default: $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db)"
+            args.mmseqs_db_path or f"(default: {MMSEQS_DB_PATH_FALLBACK_MSG})"
         )
         logger.info(f"MMseqs2 database source: {args.mmseqs_db_source or '(not specified)'}")
         _log_mmseqs_database_warnings(args, mmseqs_database)
@@ -1349,7 +1350,7 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db. '
+             f'If not provided, falls back to {MMSEQS_DB_PATH_FALLBACK_MSG}. '
              'For results comparable with BLAST, this directory should contain '
              'a database built from the same sequence universe as core_nt.'
     )
@@ -1530,7 +1531,7 @@ Notes:
         default=None,
         help='Path to the MMseqs2 database directory. '
              'Only used when --search-tool mmseqs2 is specified. '
-             'If not provided, falls back to $MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db. '
+             f'If not provided, falls back to {MMSEQS_DB_PATH_FALLBACK_MSG}. '
              'For results comparable with BLAST, this directory should contain '
              'a database built from the same sequence universe as core_nt.'
     )

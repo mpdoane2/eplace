@@ -305,6 +305,16 @@ class TestMMseqsDownloader:
                 downloader = MMseqsDownloader()
                 assert downloader.get_mmseqsdb_directory() == Path(tmpdir)
 
+    def test_get_mmseqsdb_directory_creates_missing_path(self):
+        """Resolved MMseqs directory should be created when missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = Path(tmpdir) / "missing_mmseqs_db_dir"
+            with patch.dict(os.environ, {'MMSEQS_DB_DIR': str(missing)}, clear=True):
+                downloader = MMseqsDownloader()
+                resolved = downloader.get_mmseqsdb_directory()
+                assert resolved == missing
+                assert resolved.exists()
+
     @patch('eplace_lib.ncbi_download.MMseqsDownloader.download_nt_database')
     def test_setup_mmseqs_database(self, mock_download):
         """setup_mmseqs_database delegates to MMseqsDownloader."""
