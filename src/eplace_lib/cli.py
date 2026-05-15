@@ -47,6 +47,16 @@ MMSEQS_TAXONOMY_MIN_MEMORY_GB = 128.0
 MMSEQS_DB_PATH_FALLBACK_MSG = "$MMSEQS_DB_DIR, then $MMSEQS2DB, or ~/mmseqs2db"
 
 
+def _looks_like_nt_database_name(name: str) -> bool:
+    """Return True when a database name/path component denotes an NT database."""
+    normalized = name.strip().lower()
+    return (
+        normalized == "nt"
+        or normalized.startswith("nt.")
+        or normalized.startswith("nt_")
+    )
+
+
 def _mmseqs_memory_limit_type(value: str) -> str:
     """Argparse type for ``--mmseqs-memory-limit``.
 
@@ -177,20 +187,12 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
         )
 
     # Warn when the database looks like the full NCBI NT collection.
-    def _looks_like_nt_name(name: str) -> bool:
-        normalized = name.strip().lower()
-        return (
-            normalized == "nt"
-            or normalized.startswith("nt.")
-            or normalized.startswith("nt_")
-        )
-
     nt_name_candidates = [mmseqs_database]
     if args.mmseqs_db_path:
         nt_name_candidates.append(Path(args.mmseqs_db_path).name)
 
     _looks_like_nt = any(
-        _looks_like_nt_name(candidate)
+        _looks_like_nt_database_name(candidate)
         for candidate in nt_name_candidates
         if candidate
     )
