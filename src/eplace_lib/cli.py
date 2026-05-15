@@ -177,12 +177,22 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
         )
 
     # Warn when the database looks like the full NCBI NT collection.
-    db_path_str = str(args.mmseqs_db_path).upper() if args.mmseqs_db_path else ""
-    _looks_like_nt = (
-        mmseqs_database.upper() == "NT"
-        or mmseqs_database.upper().startswith("NT.")
-        or "/NT" in db_path_str
-        or db_path_str.endswith("/NT")
+    def _looks_like_nt_name(name: str) -> bool:
+        normalized = name.strip().lower()
+        return (
+            normalized == "nt"
+            or normalized.startswith("nt.")
+            or normalized.startswith("nt_")
+        )
+
+    nt_name_candidates = [mmseqs_database]
+    if args.mmseqs_db_path:
+        nt_name_candidates.append(Path(args.mmseqs_db_path).name)
+
+    _looks_like_nt = any(
+        _looks_like_nt_name(candidate)
+        for candidate in nt_name_candidates
+        if candidate
     )
     if _looks_like_nt:
         logger.warning(
@@ -1434,6 +1444,7 @@ Notes:
         metavar='LIMIT',
         help='Maximum RAM for the MMseqs2 prefilter step, passed as '
              '--split-memory-limit to mmseqs easy-search (default: 400G). '
+             'On smaller hosts, lower this explicitly (e.g. 16G or 32G). '
              'Accepts MMseqs2-style memory strings such as 64G, 400G, or 1T. '
              'Only used when --search-tool mmseqs2 is specified.'
     )

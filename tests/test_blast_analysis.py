@@ -914,6 +914,16 @@ class TestValidateMmseqsMemoryLimit:
         with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
             validate_mmseqs_memory_limit("400g")
 
+    def test_zero_value_raises(self):
+        """Test that zero memory limit raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("0G")
+
+    def test_leading_zero_raises(self):
+        """Test that leading zero values raise ValueError."""
+        with pytest.raises(ValueError, match="Invalid MMseqs2 memory limit"):
+            validate_mmseqs_memory_limit("01G")
+
 
 class TestRunEasySearchMemoryLimit:
     """Test that run_easy_search passes --split-memory-limit to the command."""

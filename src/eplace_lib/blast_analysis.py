@@ -848,7 +848,7 @@ class MMseqs2Runner:
 def validate_mmseqs_memory_limit(value: str) -> str:
     """Validate a MMseqs2-style memory limit string.
 
-    Accepts an integer followed by a single unit suffix ``K``, ``M``, ``G``,
+    Accepts a positive integer followed by a single unit suffix ``K``, ``M``, ``G``,
     or ``T`` (case-sensitive, no space).  Examples of valid values::
 
         64G   128G   400G   1T   512M
@@ -865,7 +865,7 @@ def validate_mmseqs_memory_limit(value: str) -> str:
     """
     if not value:
         raise ValueError("MMseqs2 memory limit must not be empty.")
-    if not re.fullmatch(r'[0-9]+[KMGT]', value):
+    if not re.fullmatch(r'[1-9][0-9]*[KMGT]', value):
         raise ValueError(
             f"Invalid MMseqs2 memory limit: '{value}'. "
             "Expected an integer followed by a unit (K, M, G, or T), "
