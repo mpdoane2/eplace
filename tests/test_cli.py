@@ -7,7 +7,9 @@ without requiring external dependencies like pytaxonkit.
 """
 
 import ast
+import importlib
 import sys
+import types
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +18,30 @@ def test_cli_module_exists():
     """Test that the CLI module file exists."""
     cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
     assert cli_path.exists(), f"CLI module not found at {cli_path}"
+
+
+def _import_cli_module_with_pytaxonkit_stub(monkeypatch):
+    """Import eplace_lib.cli with a lightweight pytaxonkit stub."""
+    repo_root = Path(__file__).parent.parent
+    monkeypatch.syspath_prepend(str(repo_root / "src"))
+    monkeypatch.setitem(sys.modules, "pytaxonkit", types.ModuleType("pytaxonkit"))
+    return importlib.import_module("eplace_lib.cli")
+
+
+def test_nt_database_name_detector_accepts_nt_variants(monkeypatch):
+    """NT detector should accept canonical NT-style names."""
+    cli = _import_cli_module_with_pytaxonkit_stub(monkeypatch)
+    assert cli._looks_like_nt_database_name("nt")
+    assert cli._looks_like_nt_database_name("NT")
+    assert cli._looks_like_nt_database_name("nt.2024")
+    assert cli._looks_like_nt_database_name("nt_v5")
+
+
+def test_nt_database_name_detector_rejects_non_nt_names(monkeypatch):
+    """NT detector should reject names that are not NT collections."""
+    cli = _import_cli_module_with_pytaxonkit_stub(monkeypatch)
+    assert not cli._looks_like_nt_database_name("refseq")
+    assert not cli._looks_like_nt_database_name("custom_nt_based")
 
 
 def test_cli_syntax():
