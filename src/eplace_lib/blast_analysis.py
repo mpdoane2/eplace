@@ -634,8 +634,11 @@ class MMseqs2Runner:
             sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
             tmp_dir: Temporary directory for MMseqs2 intermediate files.
                 Defaults to a ``mmseqs_tmp`` subdirectory next to ``output_file``.
-            search_type: MMseqs2 search type: 2 (translated), 3 (nucleotide),
-                4 (translated nucleotide backtrace). Default is 3 (nucleotide).
+            search_type: MMseqs2 search type passed as ``--search-type`` to
+                ``easy-search``. Commonly used values: 2 (translated),
+                3 (nucleotide), 4 (translated nucleotide backtrace).
+                Default is 3 (nucleotide). See MMseqs2 documentation for all
+                valid values.
 
         Returns:
             True if MMseqs2 ran successfully, False otherwise
@@ -865,8 +868,11 @@ def run_mmseqs_search(
         num_threads: Number of threads to use
         sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
         skip_existing: Skip search if output file already exists (default: True)
-        search_type: MMseqs2 search type: 2 (translated), 3 (nucleotide),
-            4 (translated nucleotide backtrace). Default is 3 (nucleotide).
+        search_type: MMseqs2 search type passed as ``--search-type`` to
+            ``easy-search``. Commonly used values: 2 (translated),
+            3 (nucleotide), 4 (translated nucleotide backtrace).
+            Default is 3 (nucleotide). See MMseqs2 documentation for all
+            valid values.
 
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])

@@ -1248,8 +1248,10 @@ Notes:
         '--mmseqs-search-type',
         type=int,
         default=3,
-        help='MMseqs2 search type: 2 (translated), 3 (nucleotide), '
+        help='MMseqs2 search type passed as --search-type to easy-search. '
+             'Commonly used values: 2 (translated), 3 (nucleotide), '
              '4 (translated nucleotide backtrace). Default is 3 (nucleotide). '
+             'See MMseqs2 documentation for all valid values. '
              'Only used when --search-tool mmseqs2 is specified.'
     )
     search_parser.add_argument(
@@ -1427,8 +1429,10 @@ Notes:
         '--mmseqs-search-type',
         type=int,
         default=3,
-        help='MMseqs2 search type: 2 (translated), 3 (nucleotide), '
+        help='MMseqs2 search type passed as --search-type to easy-search. '
+             'Commonly used values: 2 (translated), 3 (nucleotide), '
              '4 (translated nucleotide backtrace). Default is 3 (nucleotide). '
+             'See MMseqs2 documentation for all valid values. '
              'Only used when --search-tool mmseqs2 is specified.'
     )
     grouped_parser.add_argument(
