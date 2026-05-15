@@ -869,7 +869,7 @@ def validate_mmseqs_memory_limit(value: str) -> str:
     if not re.fullmatch(r'[1-9][0-9]*[KMGT]', value):
         raise ValueError(
             f"Invalid MMseqs2 memory limit: '{value}'. "
-            "Expected an integer followed by a unit (K, M, G, or T), "
+            "Expected a positive integer (no leading zeros) followed by a unit (K, M, G, or T), "
             "e.g. '400G' or '1T'."
         )
     return value
