@@ -217,9 +217,11 @@ These options apply only when ``--search-tool mmseqs2`` is specified.
 
    Default: ``400G``
 
-   Accepts MMseqs2-style memory strings such as ``64G``, ``400G``, or ``1T``.
-   Invalid values (e.g. ``400GB``, ``fourhundredG``) will cause an error
-   before the search starts.
+   Accepts MMseqs2-style memory strings: an integer immediately followed by a
+   single-character unit ``K``, ``M``, ``G``, or ``T`` (no extra suffix).
+   Invalid values (e.g. ``400GB`` where ``B`` makes a double unit, or
+   ``fourhundredG`` with a non-numeric prefix) will cause an error before the
+   search starts.
 
 .. option:: --mmseqs-sensitivity FLOAT
 
@@ -417,7 +419,9 @@ These options apply only when ``--search-tool mmseqs2`` is specified.
 
    Default: ``400G``
 
-   Accepts MMseqs2-style memory strings such as ``64G``, ``400G``, or ``1T``.
+   Accepts MMseqs2-style memory strings: an integer immediately followed by a
+   single-character unit ``K``, ``M``, ``G``, or ``T`` (no extra suffix, e.g.
+   ``64G``, ``400G``, ``1T``).
 
 .. option:: --mmseqs-sensitivity FLOAT
 

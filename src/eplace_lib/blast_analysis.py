@@ -6,6 +6,7 @@ based on sequence identity and coverage criteria.
 """
 
 import os
+import re
 import subprocess
 import logging
 from typing import Optional, Dict, Tuple
@@ -844,9 +845,6 @@ class MMseqs2Runner:
         return filtered_hits
 
 
-import re as _re
-
-
 def validate_mmseqs_memory_limit(value: str) -> str:
     """Validate a MMseqs2-style memory limit string.
 
@@ -867,7 +865,7 @@ def validate_mmseqs_memory_limit(value: str) -> str:
     """
     if not value:
         raise ValueError("MMseqs2 memory limit must not be empty.")
-    if not _re.fullmatch(r'[0-9]+[KMGT]', value):
+    if not re.fullmatch(r'[0-9]+[KMGT]', value):
         raise ValueError(
             f"Invalid MMseqs2 memory limit: '{value}'. "
             "Expected an integer followed by a unit (K, M, G, or T), "
