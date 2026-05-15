@@ -422,6 +422,8 @@ These options apply only when ``--search-tool mmseqs2`` is specified.
    Accepts MMseqs2-style memory strings: an integer immediately followed by a
    single-character unit ``K``, ``M``, ``G``, or ``T`` (no extra suffix, e.g.
    ``64G``, ``400G``, ``1T``).
+   Invalid values (e.g. ``400GB`` with extra ``B`` suffix, ``fourhundredG``
+   with non-numeric prefix) will cause an error before the search starts.
 
 .. option:: --mmseqs-sensitivity FLOAT
 

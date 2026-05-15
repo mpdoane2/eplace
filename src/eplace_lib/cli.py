@@ -177,7 +177,7 @@ def _log_mmseqs_database_warnings(args, mmseqs_database: str) -> None:
         )
 
     # Warn when the database looks like the full NCBI NT collection.
-    db_path_str = str(args.mmseqs_db_path) if args.mmseqs_db_path else ""
+    db_path_str = str(args.mmseqs_db_path).upper() if args.mmseqs_db_path else ""
     _looks_like_nt = (
         mmseqs_database.upper() == "NT"
         or mmseqs_database.upper().startswith("NT.")
