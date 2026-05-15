@@ -848,8 +848,9 @@ class MMseqs2Runner:
 def validate_mmseqs_memory_limit(value: str) -> str:
     """Validate a MMseqs2-style memory limit string.
 
-    Accepts a positive integer followed by a single unit suffix ``K``, ``M``, ``G``,
-    or ``T`` (case-sensitive, no space).  Examples of valid values::
+    Accepts a positive integer (no leading zeros) followed by a single unit
+    suffix ``K``, ``M``, ``G``, or ``T`` (case-sensitive, no space).  Examples
+    of valid values::
 
         64G   128G   400G   1T   512M
 

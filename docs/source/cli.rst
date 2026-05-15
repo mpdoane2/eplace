@@ -222,7 +222,8 @@ These options apply only when ``--search-tool mmseqs2`` is specified.
 
    Accepts MMseqs2-style memory strings: an integer immediately followed by a
    single-character unit ``K``, ``M``, ``G``, or ``T`` (no extra suffix).
-   Invalid values (e.g. ``0G`` which is not a positive value, ``400GB`` where ``B`` makes a double unit, or
+   Invalid values (e.g. ``0G`` which is not a positive value, ``01G`` with a leading zero,
+   ``400GB`` where ``B`` makes a double unit, or
    ``fourhundredG`` with a non-numeric prefix) will cause an error before the
    search starts.
 
