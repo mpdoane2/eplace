@@ -205,6 +205,55 @@ Workflow Options
 
    Path to output classification TSV file
 
+MMseqs2 Options
+^^^^^^^^^^^^^^^
+
+These options apply only when ``--search-tool mmseqs2`` is specified.
+
+.. option:: --mmseqs-memory-limit LIMIT
+
+   Maximum RAM for the MMseqs2 prefilter/index step, passed as
+   ``--split-memory-limit`` to ``mmseqs easy-search``.
+
+   Default: ``400G``
+
+   On smaller hosts (laptops/small VMs), set a lower value explicitly,
+   for example ``16G`` or ``32G``.
+
+   Accepts MMseqs2-style memory strings: a positive integer (no leading zeros)
+   immediately followed by a
+   single-character unit ``K``, ``M``, ``G``, or ``T`` (no extra suffix).
+   Invalid values (e.g. ``0G`` not positive, ``01G`` with a leading zero,
+   ``400GB`` where ``B`` makes a double unit, or
+   ``fourhundredG`` with a non-numeric prefix) will cause an error before the
+   search starts.
+
+.. option:: --mmseqs-sensitivity FLOAT
+
+   MMseqs2 sensitivity setting (1–7.5)
+
+   Default: ``5.7``
+
+.. option:: --mmseqs-search-type INT
+
+   MMseqs2 search type (2 = translated, 3 = nucleotide, 4 = translated
+   nucleotide backtrace)
+
+   Default: ``3``
+
+.. option:: --mmseqs-database NAME
+
+   MMseqs2 database name (default: same as ``--database``)
+
+.. option:: --mmseqs-db-path PATH
+
+   Path to the MMseqs2 database directory
+
+.. option:: --mmseqs-db-source LABEL
+
+   Provenance label for the MMseqs2 database, recorded in
+   ``search_metadata.json``
+
 Examples
 ~~~~~~~~
 
@@ -225,6 +274,12 @@ Examples
 
    # Use custom BLAST database location
    eplace search query.fasta output_dir --blastdb-path /path/to/blastdb
+
+   # Use MMseqs2 with memory limit for large NT database
+   eplace search query.fasta output_dir \
+       --search-tool mmseqs2 \
+       --mmseqs-db-path /path/to/mmseqs_db \
+       --mmseqs-memory-limit 400G
 
 Output Structure
 ~~~~~~~~~~~~~~~~
@@ -357,6 +412,51 @@ Workflow Options
 
    Path to output classification TSV file
 
+MMseqs2 Options
+^^^^^^^^^^^^^^^
+
+These options apply only when ``--search-tool mmseqs2`` is specified.
+
+.. option:: --mmseqs-memory-limit LIMIT
+
+   Maximum RAM for the MMseqs2 prefilter/index step, passed as
+   ``--split-memory-limit`` to ``mmseqs easy-search``.
+
+   Default: ``400G``
+
+   Accepts MMseqs2-style memory strings: a positive integer (no leading zeros)
+   immediately followed by a single-character unit ``K``, ``M``, ``G``, or
+   ``T`` (no extra suffix, e.g. ``64G``, ``400G``, ``1T``).
+   Invalid values (e.g. ``0G`` not positive, ``01G`` with leading zero,
+   ``400GB`` with extra ``B`` suffix, ``fourhundredG`` with non-numeric prefix)
+   will cause an error before the search starts.
+
+.. option:: --mmseqs-sensitivity FLOAT
+
+   MMseqs2 sensitivity setting (1–7.5)
+
+   Default: ``5.7``
+
+.. option:: --mmseqs-search-type INT
+
+   MMseqs2 search type (2 = translated, 3 = nucleotide, 4 = translated
+   nucleotide backtrace)
+
+   Default: ``3``
+
+.. option:: --mmseqs-database NAME
+
+   MMseqs2 database name (default: same as ``--database``)
+
+.. option:: --mmseqs-db-path PATH
+
+   Path to the MMseqs2 database directory
+
+.. option:: --mmseqs-db-source LABEL
+
+   Provenance label for the MMseqs2 database, recorded in
+   ``search_metadata.json``
+
 Examples
 ~~~~~~~~
 
@@ -373,6 +473,12 @@ Examples
 
    # Skip alignment and tree building
    eplace grouped query.fasta output_dir --skip-alignment
+
+   # Use MMseqs2 with memory limit for large NT database
+   eplace grouped query.fasta output_dir \
+       --search-tool mmseqs2 \
+       --mmseqs-db-path /path/to/mmseqs_db \
+       --mmseqs-memory-limit 400G
 
 Output Structure
 ~~~~~~~~~~~~~~~~
@@ -630,6 +736,54 @@ Group related sequences
 
 Troubleshooting
 ---------------
+
+MMseqs2 memory limits
+~~~~~~~~~~~~~~~~~~~~~
+
+When searching against large MMseqs2 databases such as NCBI NT, the MMseqs2
+prefilter step may require hundreds of GB of RAM. If insufficient memory is
+available, MMseqs2 may fail with an error similar to:
+
+.. code-block:: text
+
+   Cannot fit databases into 22G. Please use a computer with more main memory.
+   Error: Prefilter died
+   Error: Search step died
+   Error: Search died
+
+The workflow exposes the option:
+
+.. code-block:: bash
+
+   --mmseqs-memory-limit 400G
+
+which is passed to MMseqs2 as:
+
+.. code-block:: bash
+
+   --split-memory-limit 400G
+
+For full NCBI NT, we recommend running on a high-memory node. Suggested
+starting values are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 50 50
+
+   * - Node RAM
+     - Suggested ``--mmseqs-memory-limit``
+   * - 128 GB
+     - ``90G``
+   * - 256 GB
+     - ``200G``
+   * - 512 GB
+     - ``400G``
+   * - 1 TB
+     - ``800G``
+
+For 16S amplicon/ZOTU workflows, consider using a smaller curated 16S database
+such as SILVA, GTDB rRNA, RDP, or NCBI 16S rather than full NT. These require
+far less RAM and often produce equally good taxonomic assignments for 16S data.
 
 Command not found
 ~~~~~~~~~~~~~~~~~
