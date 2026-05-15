@@ -609,7 +609,8 @@ class MMseqs2Runner:
         max_target_seqs: int = 100,
         evalue: float = 1e-5,
         sensitivity: float = 5.7,
-        tmp_dir: Optional[Path] = None
+        tmp_dir: Optional[Path] = None,
+        search_type: int = 3
     ) -> bool:
         """
         Run an MMseqs2 easy-search.
@@ -633,6 +634,11 @@ class MMseqs2Runner:
             sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
             tmp_dir: Temporary directory for MMseqs2 intermediate files.
                 Defaults to a ``mmseqs_tmp`` subdirectory next to ``output_file``.
+            search_type: MMseqs2 search type passed as ``--search-type`` to
+                ``easy-search``. Commonly used values: 2 (translated),
+                3 (nucleotide), 4 (translated nucleotide backtrace).
+                Default is 3 (nucleotide). See MMseqs2 documentation for all
+                valid values.
 
         Returns:
             True if MMseqs2 ran successfully, False otherwise
@@ -671,7 +677,8 @@ class MMseqs2Runner:
             '--threads', str(num_threads),
             '--max-seqs', str(max_target_seqs),
             '-e', str(evalue),
-            '-s', str(sensitivity)
+            '-s', str(sensitivity),
+            '--search-type', str(search_type)
         ]
 
         logger.info(f"Running MMseqs2 search: {' '.join(cmd)}")
@@ -837,7 +844,8 @@ def run_mmseqs_search(
     db_path: Optional[Path] = None,
     num_threads: int = 1,
     sensitivity: float = 5.7,
-    skip_existing: bool = True
+    skip_existing: bool = True,
+    search_type: int = 3
 ) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run an MMseqs2 search and return filtered hits.
@@ -860,6 +868,11 @@ def run_mmseqs_search(
         num_threads: Number of threads to use
         sensitivity: MMseqs2 sensitivity (1–7.5, default: 5.7)
         skip_existing: Skip search if output file already exists (default: True)
+        search_type: MMseqs2 search type passed as ``--search-type`` to
+            ``easy-search``. Commonly used values: 2 (translated),
+            3 (nucleotide), 4 (translated nucleotide backtrace).
+            Default is 3 (nucleotide). See MMseqs2 documentation for all
+            valid values.
 
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])
@@ -884,7 +897,8 @@ def run_mmseqs_search(
             output_file=output_file,
             database=database,
             num_threads=num_threads,
-            sensitivity=sensitivity
+            sensitivity=sensitivity,
+            search_type=search_type
         )
 
         if not success:
