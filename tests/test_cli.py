@@ -424,6 +424,35 @@ def test_cli_has_mmseqs_download_arguments():
     assert not missing, f"MMseqs download arguments missing from CLI: {sorted(missing)}"
 
 
+def test_cli_has_timeout_argument():
+    """Test that blast and grouped parsers have the --timeout argument."""
+    cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
+    with open(cli_path, 'r') as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    timeout_parsers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == 'add_argument'):
+            continue
+        has_timeout = any(
+            isinstance(a, ast.Constant) and a.value == '--timeout'
+            for a in node.args
+        )
+        if has_timeout and isinstance(func.value, ast.Name):
+            timeout_parsers.add(func.value.id)
+
+    expected = {'search_parser', 'grouped_parser'}
+    missing = expected - timeout_parsers
+    assert not missing, (
+        f"--timeout argument missing from: {sorted(missing)}"
+    )
+
+
 def test_cli_has_write_search_metadata_function():
     """Test that the CLI module defines the _write_search_metadata helper."""
     cli_path = Path(__file__).parent.parent / "src" / "eplace_lib" / "cli.py"
@@ -643,6 +672,7 @@ if __name__ == '__main__':
         test_cli_has_mmseqs_db_source_argument,
         test_cli_has_blast_db_source_argument,
         test_cli_has_mmseqs_download_arguments,
+        test_cli_has_timeout_argument,
         test_cli_has_write_search_metadata_function,
         test_cli_write_search_metadata_writes_json,
         test_cli_write_search_metadata_mmseqs2,

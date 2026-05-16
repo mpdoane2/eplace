@@ -399,7 +399,8 @@ def blast_command(args):
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing,
                 search_type=args.mmseqs_search_type,
-                memory_limit=args.mmseqs_memory_limit
+                memory_limit=args.mmseqs_memory_limit,
+                timeout=args.timeout
             )
 
             if not success:
@@ -841,7 +842,8 @@ def grouped_command(args):
                 sensitivity=args.mmseqs_sensitivity,
                 skip_existing=skip_existing,
                 search_type=args.mmseqs_search_type,
-                memory_limit=args.mmseqs_memory_limit
+                memory_limit=args.mmseqs_memory_limit,
+                timeout=args.timeout
             )
 
             if not success:
@@ -1372,6 +1374,13 @@ Notes:
         help='Number of threads for search and alignment (default: 1)'
     )
     search_parser.add_argument(
+        '--timeout',
+        type=int,
+        default=3600,
+        help='Maximum runtime for MMseqs2 search in seconds (default: 3600). '
+             'Only used when --search-tool mmseqs2 is specified.'
+    )
+    search_parser.add_argument(
         '--search-tool',
         type=str,
         default='blast',
@@ -1562,6 +1571,13 @@ Notes:
         type=int,
         default=1,
         help='Number of threads for search and alignment (default: 1)'
+    )
+    grouped_parser.add_argument(
+        '--timeout',
+        type=int,
+        default=3600,
+        help='Maximum runtime for MMseqs2 search in seconds (default: 3600). '
+             'Only used when --search-tool mmseqs2 is specified.'
     )
     grouped_parser.add_argument(
         '--search-tool',

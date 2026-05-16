@@ -729,8 +729,10 @@ class TestMMseqs2Runner:
             assert success is True
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
+            call_kwargs = mock_run.call_args[1]
             assert call_args[0] == 'mmseqs'
             assert call_args[1] == 'easy-search'
+            assert call_kwargs['timeout'] == 3600
 
     def test_run_easy_search_no_query_file(self):
         """Test running mmseqs with a non-existent query file."""
@@ -1024,3 +1026,56 @@ class TestRunMmseqsSearchMemoryLimit:
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             assert kwargs.get('split_memory_limit') is None
+
+
+class TestRunEasySearchTimeout:
+    """Test timeout handling in MMseqs2Runner.run_easy_search."""
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.check_mmseqs_available')
+    @patch('subprocess.run')
+    def test_timeout_passed_to_subprocess(self, mock_run, mock_check):
+        """Test that the timeout argument is passed to subprocess.run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_check.return_value = True
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+
+            runner = MMseqs2Runner(db_path=tmppath)
+            success = runner.run_easy_search(query_file, output_file, timeout=7200)
+
+            assert success is True
+            _, kwargs = mock_run.call_args
+            assert kwargs.get('timeout') == 7200
+
+
+class TestRunMmseqsSearchTimeout:
+    """Test timeout forwarding in run_mmseqs_search."""
+
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.run_easy_search')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.parse_mmseqs_results')
+    @patch('eplace_lib.blast_analysis.MMseqs2Runner.filter_hits')
+    def test_timeout_forwarded(self, mock_filter, mock_parse, mock_run):
+        """Test that timeout is passed through to run_easy_search."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            query_file = tmppath / "query.fasta"
+            output_file = tmppath / "output.txt"
+            query_file.write_text(">seq1\nATCG\n")
+
+            mock_run.return_value = True
+            mock_parse.return_value = []
+            mock_filter.return_value = []
+
+            run_mmseqs_search(
+                query_fasta=query_file,
+                output_file=output_file,
+                timeout=7200
+            )
+
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get('timeout') == 7200
