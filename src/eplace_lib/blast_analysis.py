@@ -613,7 +613,8 @@ class MMseqs2Runner:
         sensitivity: float = 5.7,
         tmp_dir: Optional[Path] = None,
         search_type: int = 3,
-        split_memory_limit: Optional[str] = None
+        split_memory_limit: Optional[str] = None,
+        timeout: int = 3600
     ) -> bool:
         """
         Run an MMseqs2 easy-search.
@@ -646,6 +647,8 @@ class MMseqs2Runner:
                 step, passed as ``--split-memory-limit`` to ``easy-search``
                 (e.g. ``"400G"``).  When ``None`` the flag is omitted and
                 MMseqs2 uses its own default.
+            timeout: Maximum runtime for the MMseqs2 search in seconds
+                (default: 3600).
 
         Returns:
             True if MMseqs2 ran successfully, False otherwise
@@ -698,7 +701,7 @@ class MMseqs2Runner:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout
+                timeout=timeout
             )
 
             if result.returncode != 0:
@@ -886,7 +889,8 @@ def run_mmseqs_search(
     sensitivity: float = 5.7,
     skip_existing: bool = True,
     search_type: int = 3,
-    memory_limit: Optional[str] = None
+    memory_limit: Optional[str] = None,
+    timeout: int = 3600
 ) -> tuple[bool, list[BlastHit]]:
     """
     Convenience function to run an MMseqs2 search and return filtered hits.
@@ -917,6 +921,8 @@ def run_mmseqs_search(
         memory_limit: Maximum RAM for the MMseqs2 prefilter/index step,
             passed as ``--split-memory-limit`` to ``easy-search``
             (e.g. ``"400G"``).  When ``None`` the flag is omitted.
+        timeout: Maximum runtime for the MMseqs2 search in seconds
+            (default: 3600).
 
     Returns:
         Tuple of (success: bool, filtered_hits: list[BlastHit])
@@ -943,7 +949,8 @@ def run_mmseqs_search(
             num_threads=num_threads,
             sensitivity=sensitivity,
             search_type=search_type,
-            split_memory_limit=memory_limit
+            split_memory_limit=memory_limit,
+            timeout=timeout
         )
 
         if not success:
