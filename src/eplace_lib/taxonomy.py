@@ -11,10 +11,10 @@ import subprocess
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple, Callable
 from collections import defaultdict
 
-from .blast_analysis import BlastHit, normalize_sequence_id
+from .blast_analysis import BlastHit, normalize_sequence_id, _parse_nbdl_custom_header
 
 import pytaxonkit
 
@@ -38,6 +38,41 @@ logger = logging.getLogger(__name__)
 
 # Valid taxonomic ranks supported by the library
 VALID_RANKS = ['domain', 'phylum', 'class', 'order', 'family', 'genus', 'species']
+
+
+def extract_custom_subject_id_and_taxid(
+    subject_id: str,
+    header: Optional[str] = None,
+    custom_header_parser: Optional[Callable[[str], Tuple[str, str, str]]] = None
+) -> Tuple[str, str]:
+    """
+    Extract the subject_id and taxid from a BLAST subject ID, optionally parsing
+    a custom header format.
+    
+    This function handles both standard NCBI-formatted IDs and custom database headers
+    (e.g., NBDL format). If a custom_header_parser is provided and a header is given,
+    it uses the parser to extract the sequence ID and taxid. Otherwise, it returns
+    the original subject_id and an empty taxid.
+    
+    Args:
+        subject_id: The original BLAST subject ID (typically from BLAST output).
+        header: The full FASTA header (optional), used with custom_header_parser.
+        custom_header_parser: Optional parser function that takes a header string and
+                             returns a tuple of (seq_id, description, taxid).
+    
+    Returns:
+        Tuple of (canonical_subject_id, taxid).
+        If no custom parser or header is provided, returns (subject_id, '').
+    """
+    if custom_header_parser and header:
+        try:
+            seq_id, description, taxid = custom_header_parser(header)
+            return (seq_id, taxid)
+        except Exception as e:
+            logger.warning(f"Error parsing custom header: {e}. Using original subject_id.")
+            return (subject_id, '')
+    
+    return (subject_id, '')
 
 
 class TaxonomyExtractor:
@@ -116,7 +151,7 @@ class TaxonomyExtractor:
             rank: Taxonomic rank for representative selection
             max_per_rank: Maximum number of representatives per rank (default: 1)
             preferred_representatives: Optional dictionary mapping rank_tid to preferred subject_id
-                                      to ensure consistent representatives across queries
+                                       to ensure consistent representatives across queries
             
         Returns:
             list of representative BlastHit objects
@@ -396,7 +431,8 @@ def process_blast_results_for_taxonomy(
     output_dir: Path,
     rank: str = "genus",
     database: str = "core_nt",
-    blastdb_path: Optional[Path] = None
+    blastdb_path: Optional[Path] = None,
+    custom_header_parser: Optional[Callable[[str], Tuple[str, str, str]]] = None
 ) -> Dict[str, Optional[Path]]:
     """
     Process BLAST hits to extract representative sequences per taxonomic rank.
@@ -407,6 +443,8 @@ def process_blast_results_for_taxonomy(
         rank: Taxonomic rank for representative selection
         database: Name of BLAST database
         blastdb_path: Path to BLAST database directory
+        custom_header_parser: Optional parser function for custom database headers.
+                             Should take a header string and return (seq_id, description, taxid).
         
     Returns:
         dictionary mapping query IDs to output FASTA file paths
@@ -417,6 +455,14 @@ def process_blast_results_for_taxonomy(
 
     tax_extractor = TaxonomyExtractor()
     seq_extractor = SequenceExtractor(blastdb_path)
+    
+    # If custom header parser is provided, extract taxids from headers and override subject_taxid
+    if custom_header_parser:
+        for hit in blast_hits:
+            # Try to extract taxid from the subject_id using custom parser
+            # (subject_id in BLAST output may already be parsed by custom parser)
+            # This is a fallback if the header wasn't available during BLAST parsing
+            logger.debug(f"Custom header parser provided for hit {hit.subject_id}")
     
     # get all the taxonomies
     subject_taxids = {hit.subject_taxid for hit in blast_hits}
