@@ -9,7 +9,7 @@ import os
 import re
 import subprocess
 import logging
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Callable
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -136,7 +136,38 @@ def _extract_accession_from_pipe_id(seq_id: str) -> str:
     return seq_id
 
 
-def normalize_sequence_id(seq_id: str) -> str:
+def _parse_nbdl_custom_header(header: str) -> str:
+    """
+    Parse a custom NBDL database header to extract the sequence ID.
+    
+    This parser handles headers in the NBDL format:
+    >NBDL-HR5SFP7MHKSYMG.v1.mt|13904-15593|+|MT-RNR2 [species=...] [dbxref=...] ...
+    
+    The sequence ID is extracted as the first pipe-delimited segment before
+    any square bracket metadata.
+    
+    Args:
+        header: The full FASTA header (including '>').
+    
+    Returns:
+        The extracted sequence ID (typically everything before the first space or bracket).
+    """
+    if not header:
+        return header
+    
+    # Remove leading '>'
+    header = header.lstrip('>')
+    
+    # Take the first token (before whitespace or bracket)
+    # Most NBDL headers have the sequence ID as the first component
+    match = re.match(r'([^\s\[]+)', header)
+    if match:
+        return match.group(1)
+    
+    return header
+
+
+def normalize_sequence_id(seq_id: str, parser: Optional[Callable[[str], str]] = None) -> str:
     """
     Normalize an arbitrary sequence or tree label to a canonical accession-like identifier.
 
@@ -150,15 +181,22 @@ def normalize_sequence_id(seq_id: str) -> str:
     4. If the token contains pipes ('|'), extract the accession via _extract_accession_from_pipe_id()
        (gi|...|gb|ACC|, ref|ACC|, gb|ACC|, etc.).
     5. Otherwise return the token unchanged.
+    
+    If a custom parser is provided, it will be used instead of the default NCBI-style parsing.
 
     Args:
         seq_id: Raw sequence identifier from any source.
+        parser: Optional custom parser function to apply instead of default parsing.
 
     Returns:
         Canonical accession string suitable for exact comparison.
     """
     if not seq_id:
         return seq_id
+
+    # If a custom parser is provided, use it
+    if parser:
+        return parser(seq_id)
 
     # Step 1: strip leading '>'
     token = seq_id.lstrip('>')
