@@ -136,35 +136,46 @@ def _extract_accession_from_pipe_id(seq_id: str) -> str:
     return seq_id
 
 
-def _parse_nbdl_custom_header(header: str) -> str:
+def _parse_nbdl_custom_header(header: str) -> Tuple[str, str, str]:
     """
-    Parse a custom NBDL database header to extract the sequence ID.
+    Parse a custom NBDL database header to extract key components.
     
     This parser handles headers in the NBDL format:
-    >NBDL-HR5SFP7MHKSYMG.v1.mt|13904-15593|+|MT-RNR2 [species=...] [dbxref=...] ...
+    >NBDL-HR5SFP7MHKSYMG.v1.mt|13904-15593|+|MT-RNR2 [species=...] [dbxref=...] ... |taxid=80951
     
-    The sequence ID is extracted as the first pipe-delimited segment before
-    any square bracket metadata.
+    Extracts:
+    1. Sequence ID: Everything before the first space/bracket (e.g., NBDL-HR5SFP7MHKSYMG.v1.mt|13904-15593|+|MT-RNR2)
+    2. Description: The description text between the end of sequence ID and first bracket (e.g., organism name and gene description)
+    3. TaxID: The taxid value from the final |taxid=XXXXX segment
     
     Args:
         header: The full FASTA header (including '>').
     
     Returns:
-        The extracted sequence ID (typically everything before the first space or bracket).
+        Tuple of (sequence_id, description, taxid) or (sequence_id, '', '') if parsing fails.
     """
     if not header:
-        return header
+        return (header, '', '')
     
     # Remove leading '>'
     header = header.lstrip('>')
     
-    # Take the first token (before whitespace or bracket)
-    # Most NBDL headers have the sequence ID as the first component
-    match = re.match(r'([^\s\[]+)', header)
-    if match:
-        return match.group(1)
+    # Extract sequence ID (first token before space or bracket)
+    seq_id_match = re.match(r'([^\s\[]+)', header)
+    seq_id = seq_id_match.group(1) if seq_id_match else header
     
-    return header
+    # Extract taxid from the header (look for |taxid=XXXXX pattern)
+    taxid = ''
+    taxid_match = re.search(r'\|taxid=(\d+)', header)
+    if taxid_match:
+        taxid = taxid_match.group(1)
+    
+    # Extract description: the text between sequence ID and first bracket
+    # This captures organism name and gene description
+    desc_match = re.search(r'^' + re.escape(seq_id) + r'\s+([^\[]*)', header)
+    description = desc_match.group(1).strip() if desc_match else ''
+    
+    return (seq_id, description, taxid)
 
 
 def normalize_sequence_id(seq_id: str, parser: Optional[Callable[[str], str]] = None) -> str:
